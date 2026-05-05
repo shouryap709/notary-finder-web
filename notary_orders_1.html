@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1c1c1c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'DM Sans', sans-serif;
+    padding: 32px 16px;
+  }
+
+  .phone {
+    width: 375px;
+    background: #2c2c2c;
+    border-radius: 48px;
+    padding: 14px;
+    border: 1.5px solid #3d3d3d;
+    box-shadow: 0 0 0 1px #222, 0 30px 80px rgba(0,0,0,.8);
+    position: relative;
+  }
+  .phone-screen {
+    background: #fff;
+    border-radius: 36px;
+    overflow: hidden;
+    height: 620px;
+    position: relative;
+  }
+  .notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 32px;
+    background: #2c2c2c;
+    border-radius: 0 0 18px 18px;
+    z-index: 200;
+  }
+  .side-btn { position: absolute; background: #3a3a3a; border-radius: 3px; border: 1px solid #444; }
+  .side-btn.vol-up  { left: -5px; top: 110px; width: 4px; height: 32px; }
+  .side-btn.vol-dn  { left: -5px; top: 152px; width: 4px; height: 32px; }
+  .side-btn.power   { right: -5px; top: 130px; width: 4px; height: 44px; }
+
+  .page {
+    position: absolute; inset: 0;
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+    transform: translateX(20px);
+    background: #fff;
+  }
+  .page.active { opacity: 1; pointer-events: all; transform: translateX(0); }
+  .page.slide-back { transform: translateX(-20px); }
+
+  .status-bar {
+    height: 44px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 24px 8px;
+    font-size: 11px; font-weight: 600; color: #000; flex-shrink: 0;
+  }
+  .status-bar .time { font-size: 13px; font-weight: 700; }
+  .status-icons { display: flex; gap: 5px; align-items: center; }
+
+  .tab-bar {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 74px;
+    background: rgba(255,255,255,.96); backdrop-filter: blur(12px);
+    border-top: 1px solid #f0f0f0;
+    display: flex; align-items: flex-start; justify-content: space-around;
+    padding-top: 10px; z-index: 100;
+  }
+  .tab-item {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    cursor: pointer; background: none; border: none;
+    font-family: 'DM Sans', sans-serif; padding: 0 14px;
+  }
+  .tab-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: #ccc; transition: color .15s; position: relative; }
+  .tab-label { font-size: 9px; font-weight: 500; color: #ccc; transition: color .15s; letter-spacing: .1px; }
+  .tab-item.active .tab-icon, .tab-item.active .tab-label { color: #000; }
+  .tab-badge {
+    position: absolute; top: -3px; right: -3px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #e05050; color: #fff; font-size: 7px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── Orders ── */
+  #orders { display: flex; flex-direction: column; }
+  .page-header { padding: 0 22px 12px; flex-shrink: 0; }
+  .page-title { font-size: 22px; font-weight: 600; letter-spacing: -.6px; color: #000; }
+  .page-sub { font-size: 10px; color: #bbb; margin-top: 2px; }
+
+  .summary-strip { display: flex; gap: 10px; padding: 0 22px 16px; flex-shrink: 0; }
+  .sum-card { flex: 1; padding: 12px 14px; background: #f7f7f7; border-radius: 12px; border: 1px solid #efefef; }
+  .sum-val { font-size: 18px; font-weight: 600; color: #000; letter-spacing: -.5px; }
+  .sum-label { font-size: 8.5px; color: #bbb; margin-top: 1px; }
+  .sum-card.dark { background: #000; border-color: #000; }
+  .sum-card.dark .sum-val { color: #fff; }
+  .sum-card.dark .sum-label { color: rgba(255,255,255,.5); }
+
+  .segment { display: flex; gap: 3px; padding: 0 22px 14px; flex-shrink: 0; }
+  .seg-btn {
+    flex: 1; padding: 7px 0;
+    font-family: 'DM Sans',sans-serif; font-size: 9.5px; font-weight: 500;
+    color: #aaa; background: #f5f5f5; border: none; border-radius: 8px;
+    cursor: pointer; transition: all .15s;
+  }
+  .seg-btn.active { background: #000; color: #fff; }
+
+  .order-list { flex: 1; overflow-y: auto; padding: 0 22px 84px; }
+  .order-list::-webkit-scrollbar { display: none; }
+
+  .order-card {
+    background: #fff; border: 1px solid #ebebeb; border-radius: 14px;
+    margin-bottom: 10px; cursor: pointer; transition: all .16s ease; overflow: hidden;
+  }
+  .order-card:hover { border-color: #d0d0d0; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+  .oc-main { padding: 14px 15px 13px; }
+  .oc-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+  .oc-avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: #f0f0f0; border: 1px solid #e6e6e6;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; color: #555; flex-shrink: 0;
+  }
+  .oc-info { flex: 1; min-width: 0; }
+  .oc-name { font-size: 13px; font-weight: 600; color: #000; letter-spacing: -.3px; }
+  .oc-time { font-size: 9px; color: #bbb; margin-top: 1px; }
+  .oc-badge { font-size: 8px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; flex-shrink: 0; }
+  .badge-new     { background: #eef9f3; color: #2db075; }
+  .badge-pending { background: #fff8ec; color: #e08a00; }
+  .badge-done    { background: #f4f4f4; color: #aaa; }
+  .badge-decline { background: #fff2f2; color: #e05050; }
+
+  .oc-services { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+  .oc-svc-tag { font-size: 9px; color: #444; background: #f6f6f6; border: 1px solid #eee; padding: 3px 8px; border-radius: 6px; font-weight: 500; }
+
+  .oc-details { display: flex; align-items: center; gap: 12px; }
+  .oc-detail { display: flex; align-items: center; gap: 5px; }
+  .oc-detail svg { color: #bbb; flex-shrink: 0; }
+  .oc-detail-text { font-size: 9.5px; color: #888; }
+
+  .oc-footer { display: flex; align-items: center; border-top: 1px solid #f4f4f4; padding: 10px 15px; gap: 8px; }
+  .oc-total { flex: 1; font-size: 14px; font-weight: 600; color: #000; letter-spacing: -.4px; }
+  .oc-total span { font-size: 9px; color: #bbb; font-weight: 400; margin-left: 4px; }
+  .oc-action {
+    font-family: 'DM Sans',sans-serif; font-size: 9.5px; font-weight: 600;
+    padding: 7px 14px; border-radius: 8px; border: none; cursor: pointer; transition: all .14s;
+  }
+  .oc-action.accept  { background: #000; color: #fff; }
+  .oc-action.accept:hover  { background: #333; }
+  .oc-action.decline { background: #f5f5f5; color: #aaa; }
+  .oc-action.decline:hover { background: #eee; color: #555; }
+  .oc-action.view    { background: #f5f5f5; color: #555; }
+  .oc-action.view:hover    { background: #eee; color: #000; }
+
+  /* ── Detail ── */
+  #detail { display: flex; flex-direction: column; }
+  .detail-nav { display: flex; align-items: center; gap: 10px; padding: 8px 18px 12px; flex-shrink: 0; }
+  .back-btn {
+    width: 32px; height: 32px; border-radius: 50%; background: #f5f5f5; border: none;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    color: #000; transition: background .14s; flex-shrink: 0;
+  }
+  .back-btn:hover { background: #eee; }
+  .detail-nav-title { font-size: 14px; font-weight: 600; color: #000; letter-spacing: -.3px; }
+  .detail-nav-sub { font-size: 9px; color: #bbb; margin-top: 1px; }
+  .detail-scroll { flex: 1; overflow-y: auto; padding: 0 22px 100px; }
+  .detail-scroll::-webkit-scrollbar { display: none; }
+
+  .detail-client {
+    display: flex; align-items: center; gap: 13px;
+    padding: 16px 18px; background: #f9f9f9; border-radius: 14px;
+    border: 1px solid #f0f0f0; margin-bottom: 14px;
+  }
+  .detail-avatar {
+    width: 46px; height: 46px; border-radius: 50%;
+    background: #ebebeb; border: 1px solid #e0e0e0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 600; color: #555; flex-shrink: 0;
+  }
+  .detail-client-name { font-size: 15px; font-weight: 600; color: #000; letter-spacing: -.4px; }
+  .detail-client-meta { font-size: 9.5px; color: #bbb; margin-top: 2px; }
+
+  .section-label { font-size: 8.5px; font-weight: 600; color: #bbb; letter-spacing: .55px; text-transform: uppercase; margin-bottom: 9px; margin-top: 16px; }
+
+  .location-card { background: #f9f9f9; border: 1px solid #f0f0f0; border-radius: 14px; overflow: hidden; }
+  .location-map { height: 120px; background: #edecea; position: relative; overflow: hidden; }
+  .location-map iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; pointer-events: none; }
+  .location-info { padding: 11px 14px; display: flex; align-items: center; gap: 9px; }
+  .location-icon { width: 30px; height: 30px; border-radius: 8px; background: #fff; border: 1px solid #ebebeb; display: flex; align-items: center; justify-content: center; color: #555; flex-shrink: 0; }
+  .location-address { flex: 1; }
+  .location-street { font-size: 11px; font-weight: 600; color: #000; letter-spacing: -.2px; }
+  .location-city { font-size: 9px; color: #aaa; margin-top: 1px; }
+  .location-dist { font-size: 9px; font-weight: 500; color: #666; background: #f0f0f0; padding: 3px 8px; border-radius: 6px; }
+
+  .svc-table { background: #f9f9f9; border: 1px solid #f0f0f0; border-radius: 14px; overflow: hidden; }
+  .svc-row { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid #f0f0f0; }
+  .svc-row:last-child { border-bottom: none; }
+  .svc-check-icon { width: 20px; height: 20px; border-radius: 6px; background: #000; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .svc-check-icon svg { width: 10px; height: 10px; }
+  .svc-row-name { flex: 1; font-size: 11px; font-weight: 500; color: #222; letter-spacing: -.1px; }
+  .svc-row-price { font-size: 11px; font-weight: 600; color: #000; }
+
+  .total-bar { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; background: #000; border-radius: 14px; margin-top: 14px; }
+  .total-bar-label { font-size: 9px; color: rgba(255,255,255,.5); letter-spacing: .3px; text-transform: uppercase; }
+  .total-bar-val { font-size: 18px; font-weight: 600; color: #fff; letter-spacing: -.5px; }
+  .total-bar-val span { font-size: 9px; color: rgba(255,255,255,.5); font-weight: 400; margin-left: 4px; }
+
+  .detail-footer {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 12px 22px 28px;
+    background: rgba(255,255,255,.96); backdrop-filter: blur(12px);
+    border-top: 1px solid #f0f0f0; display: flex; gap: 10px; z-index: 100;
+  }
+  .detail-action { flex: 1; padding: 13px; font-family: 'DM Sans',sans-serif; font-size: 11px; font-weight: 600; border: none; border-radius: 12px; cursor: pointer; transition: all .15s; }
+  .detail-action.primary { background: #000; color: #fff; }
+  .detail-action.primary:hover { background: #222; }
+  .detail-action.secondary { background: #f5f5f5; color: #555; flex: 0 0 auto; padding: 13px 18px; }
+  .detail-action.secondary:hover { background: #eee; color: #000; }
+  .detail-footer.accepted .detail-action.primary { background: #2db075; }
+  .detail-footer.accepted .detail-action.primary:hover { background: #27a06a; }
+
+  /* ── Earnings ── */
+  #earnings { display: flex; flex-direction: column; }
+  .earnings-hero { margin: 0 22px 14px; padding: 20px; background: #000; border-radius: 18px; }
+  .eh-label { font-size: 9px; color: rgba(255,255,255,.45); letter-spacing: .4px; text-transform: uppercase; margin-bottom: 6px; }
+  .eh-amount { font-size: 32px; font-weight: 600; color: #fff; letter-spacing: -1.2px; }
+  .eh-period { font-size: 9px; color: rgba(255,255,255,.4); margin-top: 4px; }
+  .eh-row { display: flex; gap: 10px; margin-top: 14px; }
+  .eh-stat { flex: 1; }
+  .eh-stat-val { font-size: 14px; font-weight: 600; color: #fff; letter-spacing: -.4px; }
+  .eh-stat-label { font-size: 8.5px; color: rgba(255,255,255,.4); margin-top: 1px; }
+  .eh-divider { width: 1px; background: rgba(255,255,255,.1); align-self: stretch; }
+
+  .earn-section { padding: 0 22px; margin-bottom: 14px; }
+  .earn-list { background: #f9f9f9; border: 1px solid #f0f0f0; border-radius: 14px; overflow: hidden; }
+  .earn-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
+  .earn-row:last-child { border-bottom: none; }
+  .earn-row:hover { background: #f5f5f5; }
+  .earn-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .earn-dot.done { background: #2db075; }
+  .earn-dot.pending { background: #e08a00; }
+  .earn-row-info { flex: 1; }
+  .earn-row-name { font-size: 11px; font-weight: 500; color: #000; letter-spacing: -.15px; }
+  .earn-row-date { font-size: 9px; color: #bbb; margin-top: 1px; }
+  .earn-row-amt { font-size: 12px; font-weight: 600; color: #000; letter-spacing: -.3px; }
+  .earn-row-amt.pending { color: #e08a00; }
+
+  /* ── Profile ── */
+  #profile { display: flex; flex-direction: column; }
+  .profile-hero { padding: 0 22px 16px; display: flex; align-items: center; gap: 14px; }
+  .profile-avatar { width: 58px; height: 58px; border-radius: 50%; background: #111; border: 2px solid #e8e8e8; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600; color: #fff; flex-shrink: 0; }
+  .profile-name { font-size: 17px; font-weight: 600; color: #000; letter-spacing: -.5px; }
+  .profile-title { font-size: 10px; color: #bbb; margin-top: 2px; }
+  .profile-rating { display: flex; align-items: center; gap: 5px; margin-top: 5px; }
+  .profile-rating svg { color: #111; }
+  .profile-rating-val { font-size: 11px; font-weight: 600; color: #000; }
+  .profile-rating-cnt { font-size: 9px; color: #bbb; }
+  .profile-edit { font-family: 'DM Sans',sans-serif; font-size: 9.5px; font-weight: 500; padding: 7px 14px; background: #f5f5f5; border: none; border-radius: 8px; cursor: pointer; color: #555; transition: all .14s; align-self: flex-start; }
+  .profile-edit:hover { background: #eee; color: #000; }
+  .profile-section { padding: 0 22px; margin-bottom: 14px; }
+  .profile-list { background: #f9f9f9; border: 1px solid #f0f0f0; border-radius: 14px; overflow: hidden; }
+  .profile-row { display: flex; align-items: center; gap: 11px; padding: 13px 14px; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+  .profile-row:last-child { border-bottom: none; }
+  .profile-row:hover { background: #f5f5f5; }
+  .profile-row-icon { width: 30px; height: 30px; border-radius: 8px; background: #fff; border: 1px solid #ebebeb; display: flex; align-items: center; justify-content: center; color: #555; flex-shrink: 0; }
+  .profile-row-label { flex: 1; font-size: 11px; font-weight: 500; color: #000; letter-spacing: -.15px; }
+  .profile-row-val { font-size: 10px; color: #bbb; }
+  .profile-row-arrow { color: #d8d8d8; }
+  .toggle { width: 34px; height: 20px; border-radius: 10px; background: #ccc; position: relative; cursor: pointer; transition: background .2s; flex-shrink: 0; }
+  .toggle.on { background: #000; }
+  .toggle::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .toggle.on::after { transform: translateX(14px); }
+
+  /* ── Maps popup ── */
+  .maps-overlay {
+    position: absolute; inset: 0; z-index: 200;
+    background: rgba(0,0,0,.32);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity .22s ease;
+  }
+  .maps-overlay.open { opacity: 1; pointer-events: all; }
+  .maps-modal {
+    width: 300px; background: #fff; border-radius: 16px;
+    border: 1px solid #e4e4e4; box-shadow: 0 16px 52px rgba(0,0,0,.18);
+    overflow: hidden;
+    transform: translateY(10px) scale(.97);
+    transition: transform .22s cubic-bezier(.4,0,.2,1), opacity .22s;
+    opacity: 0;
+  }
+  .maps-overlay.open .maps-modal { transform: translateY(0) scale(1); opacity: 1; }
+  .maps-body { padding: 22px 20px 18px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .maps-icon { width: 44px; height: 44px; border-radius: 50%; background: #f4f4f4; border: 1px solid #e8e8e8; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: #222; }
+  .maps-label { font-size: 8px; font-weight: 600; color: #bbb; letter-spacing: .55px; text-transform: uppercase; margin-bottom: 5px; }
+  .maps-name { font-size: 15px; font-weight: 600; color: #000; letter-spacing: -.4px; margin-bottom: 4px; }
+  .maps-address { font-size: 10px; color: #999; line-height: 1.5; }
+  .maps-foot { display: flex; border-top: 1px solid #f2f2f2; }
+  .maps-btn { flex: 1; padding: 13px 0; font-family: 'DM Sans',sans-serif; font-size: 10.5px; font-weight: 500; border: none; cursor: pointer; transition: background .15s; }
+  .maps-btn.cancel { background: #fff; color: #aaa; border-right: 1px solid #f2f2f2; }
+  .maps-btn.cancel:hover { background: #fafafa; color: #555; }
+  .maps-btn.open { background: #fff; color: #000; font-weight: 600; }
+  .maps-btn.open:hover { background: #f7f7f7; }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="side-btn vol-up"></div>
+  <div class="side-btn vol-dn"></div>
+  <div class="side-btn power"></div>
+  <div class="phone-screen">
+    <div class="notch"></div>
+
+    <!-- ORDERS -->
+    <div class="page active" id="orders">
+      <div class="status-bar">
+        <span class="time">9:41</span>
+        <div class="status-icons">
+          <svg width="14" height="10" viewBox="0 0 24 16" fill="currentColor"><rect x="0" y="8" width="4" height="8" rx="1"/><rect x="6" y="5" width="4" height="11" rx="1"/><rect x="12" y="2" width="4" height="14" rx="1"/><rect x="18" y="0" width="4" height="16" rx="1"/></svg>
+          <svg width="13" height="10" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1.5 7.5 C6 3 18 3 22.5 7.5"/><path d="M4.5 11 C7.5 8 16.5 8 19.5 11"/><path d="M8 14.5 C9.5 13 14.5 13 16 14.5"/><circle cx="12" cy="18" r="1.2" fill="currentColor"/></svg>
+          <svg width="22" height="10" viewBox="0 0 38 16" fill="none"><rect x="0.5" y="0.5" width="32" height="15" rx="4.5" stroke="currentColor" stroke-opacity=".35"/><rect x="2" y="2" width="26" height="12" rx="3" fill="currentColor"/><path d="M34 5.5v5c1.4-.7 1.4-4.3 0-5z" fill="currentColor" fill-opacity=".4"/></svg>
+        </div>
+      </div>
+      <div class="page-header">
+        <div class="page-title">Orders</div>
+        <div class="page-sub">Monday, May 4</div>
+      </div>
+      <div class="summary-strip">
+        <div class="sum-card dark"><div class="sum-val">3</div><div class="sum-label">New today</div></div>
+        <div class="sum-card"><div class="sum-val">$385</div><div class="sum-label">Pending value</div></div>
+        <div class="sum-card"><div class="sum-val">7</div><div class="sum-label">This week</div></div>
+      </div>
+      <div class="segment">
+        <button class="seg-btn active" id="seg-new" onclick="switchSeg('new')">New (3)</button>
+        <button class="seg-btn" id="seg-active" onclick="switchSeg('active')">Active (2)</button>
+        <button class="seg-btn" id="seg-past" onclick="switchSeg('past')">Past</button>
+      </div>
+      <div class="order-list" id="order-list"></div>
+    </div>
+
+    <!-- DETAIL -->
+    <div class="page" id="detail">
+      <div class="status-bar">
+        <span class="time">9:41</span>
+        <div class="status-icons">
+          <svg width="14" height="10" viewBox="0 0 24 16" fill="currentColor"><rect x="0" y="8" width="4" height="8" rx="1"/><rect x="6" y="5" width="4" height="11" rx="1"/><rect x="12" y="2" width="4" height="14" rx="1"/><rect x="18" y="0" width="4" height="16" rx="1"/></svg>
+          <svg width="13" height="10" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1.5 7.5 C6 3 18 3 22.5 7.5"/><path d="M4.5 11 C7.5 8 16.5 8 19.5 11"/><path d="M8 14.5 C9.5 13 14.5 13 16 14.5"/><circle cx="12" cy="18" r="1.2" fill="currentColor"/></svg>
+          <svg width="22" height="10" viewBox="0 0 38 16" fill="none"><rect x="0.5" y="0.5" width="32" height="15" rx="4.5" stroke="currentColor" stroke-opacity=".35"/><rect x="2" y="2" width="26" height="12" rx="3" fill="currentColor"/><path d="M34 5.5v5c1.4-.7 1.4-4.3 0-5z" fill="currentColor" fill-opacity=".4"/></svg>
+        </div>
+      </div>
+      <div class="detail-nav">
+        <button class="back-btn" onclick="goTo('orders','back')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div>
+          <div class="detail-nav-title" id="detail-nav-title"></div>
+          <div class="detail-nav-sub" id="detail-nav-sub"></div>
+        </div>
+      </div>
+      <div class="detail-scroll" id="detail-scroll"></div>
+      <div class="detail-footer" id="detail-footer">
+        <button class="detail-action secondary" id="detail-decline">Decline</button>
+        <button class="detail-action primary" id="detail-accept">Accept Order</button>
+      </div>
+    </div>
+
+    <!-- EARNINGS -->
+    <div class="page" id="earnings">
+      <div class="status-bar">
+        <span class="time">9:41</span>
+        <div class="status-icons">
+          <svg width="14" height="10" viewBox="0 0 24 16" fill="currentColor"><rect x="0" y="8" width="4" height="8" rx="1"/><rect x="6" y="5" width="4" height="11" rx="1"/><rect x="12" y="2" width="4" height="14" rx="1"/><rect x="18" y="0" width="4" height="16" rx="1"/></svg>
+          <svg width="13" height="10" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1.5 7.5 C6 3 18 3 22.5 7.5"/><path d="M4.5 11 C7.5 8 16.5 8 19.5 11"/><path d="M8 14.5 C9.5 13 14.5 13 16 14.5"/><circle cx="12" cy="18" r="1.2" fill="currentColor"/></svg>
+          <svg width="22" height="10" viewBox="0 0 38 16" fill="none"><rect x="0.5" y="0.5" width="32" height="15" rx="4.5" stroke="currentColor" stroke-opacity=".35"/><rect x="2" y="2" width="26" height="12" rx="3" fill="currentColor"/><path d="M34 5.5v5c1.4-.7 1.4-4.3 0-5z" fill="currentColor" fill-opacity=".4"/></svg>
+        </div>
+      </div>
+      <div class="page-header"><div class="page-title">Earnings</div><div class="page-sub">May 2026</div></div>
+      <div class="earnings-hero">
+        <div class="eh-label">Total Earned</div>
+        <div class="eh-amount">$1,840</div>
+        <div class="eh-period">May 1 – May 4, 2026</div>
+        <div class="eh-row">
+          <div class="eh-stat"><div class="eh-stat-val">14</div><div class="eh-stat-label">Orders completed</div></div>
+          <div class="eh-divider"></div>
+          <div class="eh-stat"><div class="eh-stat-val">$131</div><div class="eh-stat-label">Avg. order value</div></div>
+          <div class="eh-divider"></div>
+          <div class="eh-stat"><div class="eh-stat-val">4.9 ★</div><div class="eh-stat-label">Avg. rating</div></div>
+        </div>
+      </div>
+      <div class="earn-section">
+        <div class="section-label">Recent Payouts</div>
+        <div class="earn-list">
+          <div class="earn-row"><div class="earn-dot done"></div><div class="earn-row-info"><div class="earn-row-name">Wei Zhang · Real Estate Docs</div><div class="earn-row-date">Today, 8:12 AM</div></div><div class="earn-row-amt">$75</div></div>
+          <div class="earn-row"><div class="earn-dot done"></div><div class="earn-row-info"><div class="earn-row-name">Ana Ruiz · Loan Signing</div><div class="earn-row-date">Yesterday, 3:45 PM</div></div><div class="earn-row-amt">$150</div></div>
+          <div class="earn-row"><div class="earn-dot pending"></div><div class="earn-row-info"><div class="earn-row-name">Marcus Bell · Power of Attorney</div><div class="earn-row-date">Yesterday, 1:20 PM · Pending</div></div><div class="earn-row-amt pending">$50</div></div>
+          <div class="earn-row"><div class="earn-dot done"></div><div class="earn-row-info"><div class="earn-row-name">Priya Kapoor · Apostille</div><div class="earn-row-date">May 2, 11:00 AM</div></div><div class="earn-row-amt">$125</div></div>
+          <div class="earn-row"><div class="earn-dot done"></div><div class="earn-row-info"><div class="earn-row-name">Jordan Lee · Trusts &amp; Wills</div><div class="earn-row-date">May 2, 9:30 AM</div></div><div class="earn-row-amt">$85</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROFILE -->
+    <div class="page" id="profile">
+      <div class="status-bar">
+        <span class="time">9:41</span>
+        <div class="status-icons">
+          <svg width="14" height="10" viewBox="0 0 24 16" fill="currentColor"><rect x="0" y="8" width="4" height="8" rx="1"/><rect x="6" y="5" width="4" height="11" rx="1"/><rect x="12" y="2" width="4" height="14" rx="1"/><rect x="18" y="0" width="4" height="16" rx="1"/></svg>
+          <svg width="13" height="10" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1.5 7.5 C6 3 18 3 22.5 7.5"/><path d="M4.5 11 C7.5 8 16.5 8 19.5 11"/><path d="M8 14.5 C9.5 13 14.5 13 16 14.5"/><circle cx="12" cy="18" r="1.2" fill="currentColor"/></svg>
+          <svg width="22" height="10" viewBox="0 0 38 16" fill="none"><rect x="0.5" y="0.5" width="32" height="15" rx="4.5" stroke="currentColor" stroke-opacity=".35"/><rect x="2" y="2" width="26" height="12" rx="3" fill="currentColor"/><path d="M34 5.5v5c1.4-.7 1.4-4.3 0-5z" fill="currentColor" fill-opacity=".4"/></svg>
+        </div>
+      </div>
+      <div class="page-header" style="margin-bottom:0"><div class="page-title">Profile</div></div>
+      <div style="flex:1;overflow-y:auto;">
+        <div style="height:14px"></div>
+        <div class="profile-hero">
+          <div class="profile-avatar">MC</div>
+          <div style="flex:1">
+            <div class="profile-name">Margaret Chen</div>
+            <div class="profile-title">Certified Notary Public · San Jose, CA</div>
+            <div class="profile-rating">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span class="profile-rating-val">4.9</span>
+              <span class="profile-rating-cnt">312 reviews</span>
+            </div>
+          </div>
+          <button class="profile-edit">Edit</button>
+        </div>
+        <div class="profile-section">
+          <div class="section-label">Availability</div>
+          <div class="profile-list">
+            <div class="profile-row"><div class="profile-row-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="profile-row-label">Available Now</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+            <div class="profile-row"><div class="profile-row-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><span class="profile-row-label">Hours</span><span class="profile-row-val">8 AM – 8 PM</span><svg class="profile-row-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+            <div class="profile-row"><div class="profile-row-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg></div><span class="profile-row-label">Service Radius</span><span class="profile-row-val">10 mi</span><svg class="profile-row-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+          </div>
+        </div>
+        <div class="profile-section">
+          <div class="section-label">Notifications</div>
+          <div class="profile-list">
+            <div class="profile-row"><div class="profile-row-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div><span class="profile-row-label">New Order Alerts</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+            <div class="profile-row"><div class="profile-row-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.07 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><span class="profile-row-label">SMS Reminders</span><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+          </div>
+        </div>
+        <div style="height:80px"></div>
+      </div>
+    </div>
+
+    <!-- GOOGLE MAPS POPUP -->
+    <div class="maps-overlay" id="maps-overlay">
+      <div class="maps-modal">
+        <div class="maps-body">
+          <div class="maps-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+              <circle cx="12" cy="9" r="2.5"/>
+            </svg>
+          </div>
+          <div class="maps-label">Open in Maps</div>
+          <div class="maps-name" id="maps-name"></div>
+          <div class="maps-address" id="maps-address"></div>
+        </div>
+        <div class="maps-foot">
+          <button class="maps-btn cancel" id="maps-cancel">Cancel</button>
+          <button class="maps-btn open" id="maps-open">Open Google Maps</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB BAR -->
+    <div class="tab-bar">
+      <button class="tab-item active" id="tab-orders" onclick="goTo('orders')">
+        <div class="tab-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+          <div class="tab-badge" id="orders-badge">3</div>
+        </div>
+        <span class="tab-label">Orders</span>
+      </button>
+      <button class="tab-item" id="tab-earnings" onclick="goTo('earnings')">
+        <div class="tab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <span class="tab-label">Earnings</span>
+      </button>
+      <button class="tab-item" id="tab-profile" onclick="goTo('profile')">
+        <div class="tab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        <span class="tab-label">Profile</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const PRICES = {
+  "Real Estate Docs":75,"Loan Signing":150,"Power of Attorney":50,"Trusts & Wills":85,
+  "Apostille":125,"Remote Online":65,"Deeds":60,"Affidavits":35,"Jurats":30,
+  "Copy Certification":25,"Mobile Visits":50,"Contracts":45,"Medical Forms":40,
+  "Process Serving":85,"Real Estate":75,"Wills":55,"Trusts":70,"Immigration Docs":55,
+};
+
+const ORDERS = [
+  { id:"ORD-0041", status:"new",    client:{name:"Wei Zhang",   init:"WZ", phone:"(415) 555-0183"}, services:["Real Estate Docs","Loan Signing"],      address:"482 Meridian Ave",     city:"San Jose, CA 95126", dist:"0.8 mi", note:"Please bring ID. Available after 10 AM.",       time:"8 min ago",  mapBbox:"-121.9200,37.3000,-121.8200,37.3600" },
+  { id:"ORD-0040", status:"new",    client:{name:"Ana Ruiz",    init:"AR", phone:"(408) 555-0294"}, services:["Power of Attorney","Affidavits"],        address:"1127 Lincoln Ave",     city:"San Jose, CA 95125", dist:"1.3 mi", note:"",                                              time:"22 min ago", mapBbox:"-121.9000,37.2900,-121.8000,37.3500" },
+  { id:"ORD-0039", status:"new",    client:{name:"Marcus Bell", init:"MB", phone:"(669) 555-0371"}, services:["Apostille"],                             address:"3304 Blossom Hill Rd", city:"San Jose, CA 95118", dist:"2.1 mi", note:"Documents ready. Need same-day if possible.", time:"41 min ago", mapBbox:"-121.8800,37.2800,-121.7800,37.3400" },
+  { id:"ORD-0038", status:"active", client:{name:"Jordan Lee",  init:"JL", phone:"(408) 555-0552"}, services:["Trusts & Wills","Copy Certification"],   address:"890 Willow St",        city:"San Jose, CA 95125", dist:"1.6 mi", note:"Will be home all afternoon.",                  time:"2 hr ago",   mapBbox:"-121.9100,37.3100,-121.8100,37.3700" },
+  { id:"ORD-0037", status:"active", client:{name:"Priya Kapoor",init:"PK", phone:"(669) 555-0618"}, services:["Remote Online"],                         address:"Remote — video call",  city:"San Jose, CA",       dist:"—",      note:"Zoom link in messages.",                        time:"3 hr ago",   mapBbox:null },
+  { id:"ORD-0036", status:"past",   client:{name:"Derek Moss",  init:"DM", phone:"(408) 555-0744"}, services:["Deeds","Real Estate Docs"],               address:"211 Almaden Blvd",     city:"San Jose, CA 95110", dist:"0.5 mi", note:"",                                              time:"Yesterday",  mapBbox:"-121.8900,37.3300,-121.7900,37.3900" },
+  { id:"ORD-0035", status:"past",   client:{name:"Sofia Tanaka",init:"ST", phone:"(408) 555-0822"}, services:["Loan Signing"],                           address:"744 S 1st St",         city:"San Jose, CA 95110", dist:"0.9 mi", note:"",                                              time:"Yesterday",  mapBbox:"-121.8700,37.3200,-121.7700,37.3800" },
+];
+
+let currentSeg = 'new';
+let activeOrderId = null;
+let pendingMapsOrderId = null;
+
+const orderTotal = o => o.services.reduce((s, v) => s + (PRICES[v] ?? 0), 0);
+const isPast = o => ['past','done','decline'].includes(o.status);
+
+function badgeClass(s) { return {new:'badge-new',active:'badge-pending',done:'badge-done',past:'badge-done',decline:'badge-decline'}[s] ?? 'badge-done'; }
+function badgeLabel(s) { return {new:'New',active:'Active',done:'Completed',past:'Completed',decline:'Declined'}[s] ?? s; }
+
+function renderOrders() {
+  const list = document.getElementById('order-list');
+  const filtered = ORDERS.filter(o => currentSeg === 'past' ? isPast(o) : o.status === currentSeg);
+  if (!filtered.length) {
+    list.innerHTML = `<div style="text-align:center;padding:48px 0;color:#ccc;font-size:11px">No ${currentSeg} orders</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(o => {
+    const total = orderTotal(o);
+    const past = isPast(o);
+    return `
+    <div class="order-card" onclick="openDetail('${o.id}')">
+      <div class="oc-main">
+        <div class="oc-top">
+          <div class="oc-avatar">${o.client.init}</div>
+          <div class="oc-info"><div class="oc-name">${o.client.name}</div><div class="oc-time">${o.id} · ${o.time}</div></div>
+          <div class="oc-badge ${badgeClass(o.status)}">${badgeLabel(o.status)}</div>
+        </div>
+        <div class="oc-services">${o.services.map(s=>`<span class="oc-svc-tag">${s}</span>`).join('')}</div>
+        <div class="oc-details">
+          <div class="oc-detail"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg><span class="oc-detail-text">${o.address}</span></div>
+          <div class="oc-detail"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span class="oc-detail-text">${o.dist}</span></div>
+        </div>
+      </div>
+      <div class="oc-footer">
+        <div class="oc-total">$${total}<span>· ${o.services.length} service${o.services.length!==1?'s':''}</span></div>
+        ${past
+          ? `<button class="oc-action view" onclick="event.stopPropagation();openDetail('${o.id}')">View</button>`
+          : `<button class="oc-action decline" onclick="event.stopPropagation();quickDecline('${o.id}')">Decline</button>
+             <button class="oc-action accept"  onclick="event.stopPropagation();quickAccept('${o.id}')">Accept</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function switchSeg(seg) {
+  currentSeg = seg;
+  document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('seg-' + seg).classList.add('active');
+  renderOrders();
+}
+
+function quickAccept(id) {
+  pendingMapsOrderId = id;
+  const o = ORDERS.find(x => x.id === id);
+  if (!o) return;
+  document.getElementById('maps-name').textContent = o.client.name;
+  document.getElementById('maps-address').textContent = `${o.address}, ${o.city}`;
+  document.getElementById('maps-overlay').classList.add('open');
+}
+
+function quickDecline(id) {
+  const o = ORDERS.find(x => x.id === id);
+  if (!o) return;
+  o.status = 'decline';
+  updateBadge();
+  renderOrders();
+}
+
+// Maps popup
+const mapsOverlay = document.getElementById('maps-overlay');
+document.getElementById('maps-cancel').addEventListener('click', () => mapsOverlay.classList.remove('open'));
+document.getElementById('maps-open').addEventListener('click', () => {
+  const o = ORDERS.find(x => x.id === pendingMapsOrderId);
+  if (o) {
+    o.status = 'active';
+    updateBadge();
+    renderOrders();
+    const query = encodeURIComponent(`${o.address}, ${o.city}`);
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${query}`, '_blank');
+  }
+  mapsOverlay.classList.remove('open');
+});
+mapsOverlay.addEventListener('click', e => { if (e.target === mapsOverlay) mapsOverlay.classList.remove('open'); });
+
+function updateBadge() {
+  const count = ORDERS.filter(o => o.status === 'new').length;
+  const badge = document.getElementById('orders-badge');
+  badge.textContent = count;
+  badge.style.display = count ? 'flex' : 'none';
+  document.getElementById('seg-new').textContent = `New (${count})`;
+}
+
+function openDetail(id) {
+  activeOrderId = id;
+  const o = ORDERS.find(x => x.id === id);
+  const total = orderTotal(o);
+  const past = isPast(o);
+  const active = o.status === 'active';
+
+  document.getElementById('detail-nav-title').textContent = o.id;
+  document.getElementById('detail-nav-sub').textContent = `${o.client.name} · ${o.time}`;
+
+  document.getElementById('detail-scroll').innerHTML = `
+    <div class="detail-client">
+      <div class="detail-avatar">${o.client.init}</div>
+      <div style="flex:1"><div class="detail-client-name">${o.client.name}</div><div class="detail-client-meta">${o.client.phone} · ${o.time}</div></div>
+      <div class="oc-badge ${badgeClass(o.status)}">${badgeLabel(o.status)}</div>
+    </div>
+    <div class="section-label">Location</div>
+    <div class="location-card">
+      ${o.mapBbox
+        ? `<div class="location-map"><iframe src="https://www.openstreetmap.org/export/embed.html?bbox=${o.mapBbox}&layer=mapnik" allowfullscreen loading="lazy"></iframe></div>`
+        : `<div style="height:72px;background:#f4f4f4;display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.8"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>`}
+      <div class="location-info">
+        <div class="location-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg></div>
+        <div class="location-address"><div class="location-street">${o.address}</div><div class="location-city">${o.city}</div></div>
+        <div class="location-dist">${o.dist}</div>
+      </div>
+    </div>
+    <div class="section-label">Services Ordered</div>
+    <div class="svc-table">${o.services.map(s=>`
+      <div class="svc-row">
+        <div class="svc-check-icon"><svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><polyline points="2,6 5,9.5 10,3"/></svg></div>
+        <span class="svc-row-name">${s}</span><span class="svc-row-price">$${PRICES[s]??'—'}</span>
+      </div>`).join('')}</div>
+    <div class="total-bar">
+      <span class="total-bar-label">Total</span>
+      <div class="total-bar-val">$${total}<span>· ${o.services.length} service${o.services.length!==1?'s':''}</span></div>
+    </div>
+    ${o.note ? `<div class="section-label">Client Note</div><div style="background:#fffcf0;border:1px solid #f5eed8;border-radius:12px;padding:12px 14px;font-size:11px;color:#5a4a00;line-height:1.55">${o.note}</div>` : ''}
+    <div style="height:20px"></div>`;
+
+  const footer = document.getElementById('detail-footer');
+  const acc = document.getElementById('detail-accept');
+  const dec = document.getElementById('detail-decline');
+  footer.className = 'detail-footer' + (active ? ' accepted' : '');
+
+  if (past) {
+    dec.style.display = 'none'; acc.textContent = 'Close';
+    acc.onclick = () => goTo('orders', 'back');
+  } else if (active) {
+    dec.style.display = 'none'; acc.textContent = 'Mark Complete';
+    acc.onclick = () => { ORDERS.find(x=>x.id===activeOrderId).status='past'; updateBadge(); goTo('orders','back'); };
+  } else {
+    dec.style.display = ''; acc.textContent = 'Accept Order';
+    acc.onclick = () => { quickAccept(activeOrderId); };
+    dec.onclick = () => { ORDERS.find(x=>x.id===activeOrderId).status='decline'; updateBadge(); goTo('orders','back'); };
+  }
+
+  goTo('detail');
+}
+
+function goTo(page, dir) {
+  document.querySelectorAll('.page').forEach(p => {
+    p.classList.remove('active');
+    if (dir === 'back') p.classList.add('slide-back');
+    else p.classList.remove('slide-back');
+  });
+  setTimeout(() => document.querySelectorAll('.page').forEach(p => p.classList.remove('slide-back')), 10);
+  document.getElementById(page).classList.add('active');
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+  const tab = document.getElementById('tab-' + (page === 'detail' ? 'orders' : page));
+  if (tab) tab.classList.add('active');
+  if (page === 'orders') renderOrders();
+}
+
+renderOrders();
+updateBadge();
+</script>
+</body>
+</html>

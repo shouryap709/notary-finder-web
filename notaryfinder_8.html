@@ -264,6 +264,154 @@
   .svc-name { font-size: 8.5px; color: #333; font-weight: 500; }
 
   .map-area { flex: 1; position: relative; overflow: hidden; background: #edecea; }
+
+  .book-overlay {
+    position: absolute; inset: 0; z-index: 200;
+    background: rgba(0,0,0,.32);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity .22s ease;
+  }
+  .book-overlay.open { opacity: 1; pointer-events: all; }
+
+  .book-modal {
+    width: 370px; max-height: 490px;
+    background: #fff; border-radius: 13px;
+    border: 1px solid #e4e4e4;
+    box-shadow: 0 16px 52px rgba(0,0,0,.18);
+    display: flex; flex-direction: column;
+    transform: translateY(10px) scale(.97);
+    transition: transform .22s cubic-bezier(.4,0,.2,1), opacity .22s;
+    opacity: 0;
+  }
+  .book-overlay.open .book-modal { transform: translateY(0) scale(1); opacity: 1; }
+
+  .book-head {
+    padding: 16px 18px 13px;
+    border-bottom: 1px solid #f2f2f2;
+    display: flex; align-items: flex-start; gap: 11px; flex-shrink: 0;
+  }
+  .book-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: #ebebeb; border: 1px solid #ddd;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: #555; flex-shrink: 0;
+  }
+  .book-meta { flex: 1; }
+  .book-name { font-size: 13px; font-weight: 600; color: #000; letter-spacing: -.3px; margin-bottom: 1px; }
+  .book-title-sub { font-size: 9px; color: #aaa; }
+  .book-close {
+    background: none; border: none; cursor: pointer;
+    color: #ccc; font-size: 16px; line-height: 1;
+    padding: 0; transition: color .13s; margin-top: -1px;
+  }
+  .book-close:hover { color: #000; }
+
+  .book-svc-label {
+    font-size: 8px; font-weight: 600; color: #bbb; letter-spacing: .55px;
+    text-transform: uppercase; padding: 12px 18px 8px; flex-shrink: 0;
+  }
+
+  .book-list {
+    flex: 1; overflow-y: auto; padding: 0 18px;
+  }
+  .book-list::-webkit-scrollbar { width: 3px; }
+  .book-list::-webkit-scrollbar-thumb { background: #e4e4e4; border-radius: 2px; }
+
+  .book-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid #f5f5f5;
+    cursor: pointer; transition: opacity .12s;
+  }
+  .book-row:last-child { border-bottom: none; }
+  .book-row:hover { opacity: .75; }
+
+  .book-checkbox {
+    width: 15px; height: 15px; border-radius: 4px;
+    border: 1.5px solid #ddd; background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all .14s;
+  }
+  .book-row.checked .book-checkbox {
+    background: #000; border-color: #000;
+  }
+  .book-row.checked .book-checkbox svg { display: block; }
+  .book-checkbox svg { display: none; width: 8px; height: 8px; }
+
+  .book-svc-name { font-size: 10px; color: #222; font-weight: 500; flex: 1; letter-spacing: -.1px; }
+  .book-price { font-size: 10px; color: #888; font-weight: 400; white-space: nowrap; }
+  .book-row.checked .book-price { color: #000; font-weight: 500; }
+
+  .book-foot {
+    padding: 13px 18px 15px;
+    border-top: 1px solid #f2f2f2; flex-shrink: 0;
+  }
+  .book-total-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 11px;
+  }
+  .book-total-label { font-size: 9px; color: #bbb; letter-spacing: .1px; }
+  .book-total-val { font-size: 15px; font-weight: 600; color: #000; letter-spacing: -.4px; }
+  .book-total-val span { font-size: 9px; color: #bbb; font-weight: 400; margin-left: 3px; }
+
+  .book-order-btn {
+    width: 100%; padding: 10px;
+    background: #000; color: #fff; border: none;
+    border-radius: 8px; font-family: 'DM Sans',sans-serif;
+    font-size: 10.5px; font-weight: 600; letter-spacing: .1px;
+    cursor: pointer; transition: background .16s;
+  }
+  .book-order-btn:hover { background: #222; }
+  .book-order-btn:disabled { background: #ccc; cursor: default; }
+
+  .call-overlay {
+    position: absolute; inset: 0; z-index: 200;
+    background: rgba(0,0,0,.32);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity .22s ease;
+  }
+  .call-overlay.open { opacity: 1; pointer-events: all; }
+
+  .call-modal {
+    width: 290px;
+    background: #fff; border-radius: 13px;
+    border: 1px solid #e4e4e4;
+    box-shadow: 0 16px 52px rgba(0,0,0,.18);
+    overflow: hidden;
+    transform: translateY(10px) scale(.97);
+    transition: transform .22s cubic-bezier(.4,0,.2,1), opacity .22s;
+    opacity: 0;
+  }
+  .call-overlay.open .call-modal { transform: translateY(0) scale(1); opacity: 1; }
+
+  .call-body {
+    padding: 24px 20px 20px;
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+  }
+  .call-icon {
+    width: 42px; height: 42px; border-radius: 50%;
+    background: #f4f4f4; border: 1px solid #e8e8e8;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 13px; color: #222;
+  }
+  .call-label { font-size: 8px; font-weight: 600; color: #bbb; letter-spacing: .55px; text-transform: uppercase; margin-bottom: 5px; }
+  .call-name { font-size: 15px; font-weight: 600; color: #000; letter-spacing: -.4px; margin-bottom: 4px; }
+  .call-number { font-size: 11px; color: #888; letter-spacing: .2px; }
+
+  .call-foot {
+    display: flex; border-top: 1px solid #f2f2f2;
+  }
+  .call-foot-btn {
+    flex: 1; padding: 12px 0;
+    font-family: 'DM Sans',sans-serif; font-size: 10.5px; font-weight: 500;
+    border: none; cursor: pointer; transition: background .15s;
+    letter-spacing: .05px;
+  }
+  .call-foot-btn.cancel { background: #fff; color: #aaa; border-right: 1px solid #f2f2f2; }
+  .call-foot-btn.cancel:hover { background: #fafafa; color: #555; }
+  .call-foot-btn.confirm { background: #fff; color: #000; font-weight: 600; }
+  .call-foot-btn.confirm:hover { background: #f7f7f7; }
 </style>
 </head>
 <body>
@@ -401,21 +549,83 @@
     </div>
   </div>
 
+  <div class="call-overlay" id="call-overlay">
+    <div class="call-modal">
+      <div class="call-body">
+        <div class="call-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.07 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+          </svg>
+        </div>
+        <div class="call-label">Call notary</div>
+        <div class="call-name" id="call-name"></div>
+        <div class="call-number" id="call-number"></div>
+      </div>
+      <div class="call-foot">
+        <button class="call-foot-btn cancel" id="call-cancel">Cancel</button>
+        <button class="call-foot-btn confirm" id="call-confirm">Call</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="book-overlay" id="book-overlay">
+    <div class="book-modal" id="book-modal">
+      <div class="book-head">
+        <div class="book-avatar" id="book-avatar"></div>
+        <div class="book-meta">
+          <div class="book-name" id="book-notary-name"></div>
+          <div class="book-title-sub" id="book-notary-title"></div>
+        </div>
+        <button class="book-close" id="book-close">&#x2715;</button>
+      </div>
+      <div class="book-svc-label">Select services</div>
+      <div class="book-list" id="book-list"></div>
+      <div class="book-foot">
+        <div class="book-total-row">
+          <span class="book-total-label">TOTAL</span>
+          <div class="book-total-val" id="book-total">$0 <span>· 0 services</span></div>
+        </div>
+        <button class="book-order-btn" id="book-order-btn" disabled>Place Order</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 </div>
 <div class="laptop-base"><div class="trackpad"></div></div>
 </div>
 
 <script>
+const PRICES = {
+  "Real Estate Docs": 75,
+  "Loan Signing": 150,
+  "Power of Attorney": 50,
+  "Trusts & Wills": 85,
+  "Apostille": 125,
+  "Remote Online": 65,
+  "Deeds": 60,
+  "Affidavits": 35,
+  "Jurats": 30,
+  "Copy Certification": 25,
+  "Mobile Visits": 50,
+  "Contracts": 45,
+  "Medical Forms": 40,
+  "Process Serving": 85,
+  "Real Estate": 75,
+  "Wills": 55,
+  "Trusts": 70,
+  "Immigration Docs": 55,
+};
+
 const NS = [
-  { id:1, name:"Margaret Chen",   init:"MC", title:"Certified Notary Public",       rating:4.9, reviews:312, dist:"0.3 mi", avail:true,  until:"8:00 PM",  tags:["Loan Signing","Mobile","Remote"],    svc:["Real Estate Docs","Loan Signing","Power of Attorney","Trusts & Wills","Apostille","Remote Online"] },
-  { id:2, name:"James Alvarez",   init:"JA", title:"Loan Signing Agent",             rating:4.7, reviews:187, dist:"0.6 mi", avail:true,  until:"9:30 PM",  tags:["Loan Signing","In-Office"],          svc:["Loan Signing","Deeds","Affidavits","Jurats","Copy Certification"] },
-  { id:3, name:"Sandra Park",     init:"SP", title:"Mobile Notary",                  rating:4.5, reviews:94,  dist:"1.1 mi", avail:false, until:null,        tags:["Mobile","Apostille"],                svc:["Apostille","Mobile Visits","Affidavits","Contracts","Medical Forms"] },
-  { id:4, name:"David Nguyen",    init:"DN", title:"Notary & Process Server",        rating:4.8, reviews:221, dist:"1.4 mi", avail:true,  until:"7:00 PM",  tags:["Remote","Mobile","Loan Signing"],    svc:["Remote Online","Loan Signing","Process Serving","Real Estate","Wills"] },
-  { id:5, name:"Priya Sharma",    init:"PS", title:"Bilingual Notary · EN / HI",    rating:4.6, reviews:58,  dist:"1.8 mi", avail:true,  until:"6:00 PM",  tags:["Bilingual","In-Office"],             svc:["Affidavits","Contracts","Trusts","Immigration Docs","Copy Certification"] },
-  { id:6, name:"Carlos Reyes",    init:"CR", title:"Mobile Notary",                  rating:4.4, reviews:41,  dist:"2.2 mi", avail:false, until:null,        tags:["Mobile","Real Estate"],              svc:["Real Estate","Affidavits","Loan Signing","Deeds"] },
-  { id:7, name:"Anna Mitchell",   init:"AM", title:"Remote Notary Specialist",       rating:4.9, reviews:502, dist:"2.6 mi", avail:true,  until:"10:00 PM", tags:["Remote","RON Certified"],            svc:["Remote Online","Power of Attorney","Trusts","Medical Forms","Wills"] },
-  { id:8, name:"Thomas Okafor",   init:"TO", title:"Notary & Legal Doc Assistant",  rating:4.3, reviews:29,  dist:"3.1 mi", avail:true,  until:"5:30 PM",  tags:["In-Office","Apostille"],             svc:["Apostille","Copy Certification","Contracts","Affidavits"] },
+  { id:1, name:"Margaret Chen",   init:"MC", title:"Certified Notary Public",       phone:"(408) 555-0182", rating:4.9, reviews:312, dist:"0.3 mi", avail:true,  until:"8:00 PM",  tags:["Loan Signing","Mobile","Remote"],    svc:["Real Estate Docs","Loan Signing","Power of Attorney","Trusts & Wills","Apostille","Remote Online"] },
+  { id:2, name:"James Alvarez",   init:"JA", title:"Loan Signing Agent",             phone:"(408) 555-0347", rating:4.7, reviews:187, dist:"0.6 mi", avail:true,  until:"9:30 PM",  tags:["Loan Signing","In-Office"],          svc:["Loan Signing","Deeds","Affidavits","Jurats","Copy Certification"] },
+  { id:3, name:"Sandra Park",     init:"SP", title:"Mobile Notary",                  phone:"(669) 555-0214", rating:4.5, reviews:94,  dist:"1.1 mi", avail:false, until:null,        tags:["Mobile","Apostille"],                svc:["Apostille","Mobile Visits","Affidavits","Contracts","Medical Forms"] },
+  { id:4, name:"David Nguyen",    init:"DN", title:"Notary & Process Server",        phone:"(408) 555-0763", rating:4.8, reviews:221, dist:"1.4 mi", avail:true,  until:"7:00 PM",  tags:["Remote","Mobile","Loan Signing"],    svc:["Remote Online","Loan Signing","Process Serving","Real Estate","Wills"] },
+  { id:5, name:"Priya Sharma",    init:"PS", title:"Bilingual Notary · EN / HI",    phone:"(669) 555-0491", rating:4.6, reviews:58,  dist:"1.8 mi", avail:true,  until:"6:00 PM",  tags:["Bilingual","In-Office"],             svc:["Affidavits","Contracts","Trusts","Immigration Docs","Copy Certification"] },
+  { id:6, name:"Carlos Reyes",    init:"CR", title:"Mobile Notary",                  phone:"(408) 555-0628", rating:4.4, reviews:41,  dist:"2.2 mi", avail:false, until:null,        tags:["Mobile","Real Estate"],              svc:["Real Estate","Affidavits","Loan Signing","Deeds"] },
+  { id:7, name:"Anna Mitchell",   init:"AM", title:"Remote Notary Specialist",       phone:"(408) 555-0935", rating:4.9, reviews:502, dist:"2.6 mi", avail:true,  until:"10:00 PM", tags:["Remote","RON Certified"],            svc:["Remote Online","Power of Attorney","Trusts","Medical Forms","Wills"] },
+  { id:8, name:"Thomas Okafor",   init:"TO", title:"Notary & Legal Doc Assistant",  phone:"(669) 555-0157", rating:4.3, reviews:29,  dist:"3.1 mi", avail:true,  until:"5:30 PM",  tags:["In-Office","Apostille"],             svc:["Apostille","Copy Certification","Contracts","Affidavits"] },
 ];
 
 function stars(r) {
@@ -450,11 +660,11 @@ function renderCards() {
       </div>
       <div class="ctags">${n.tags.map(t=>`<span class="ctag">${t}</span>`).join('')}</div>
       <div class="cactions">
-        <button class="cact" onclick="stopProp(event)">Book</button>
+        <button class="cact" onclick="openBook(${n.id},event)">Book</button>
         <span class="csep">·</span>
         <button class="cact sec" onclick="toggleSvc(${n.id},event)">See Services</button>
         <span class="csep">·</span>
-        <button class="cact sec" onclick="stopProp(event)">Call</button>
+        <button class="cact sec" onclick="openCall(${n.id},event)">Call</button>
       </div>
       <div class="svc-popup" id="svc-${n.id}">
         <div class="svc-hdr">
@@ -557,6 +767,72 @@ document.querySelectorAll('.fm-opt').forEach(opt => {
       this.classList.toggle('on');
     }
   });
+});
+
+const bookOverlay = document.getElementById('book-overlay');
+const bookList = document.getElementById('book-list');
+const bookTotal = document.getElementById('book-total');
+const bookOrderBtn = document.getElementById('book-order-btn');
+let bookSelected = new Set();
+
+function openBook(id, e) {
+  e.stopPropagation();
+  const n = NS.find(x => x.id === id);
+  if (!n) return;
+  bookSelected.clear();
+  document.getElementById('book-avatar').textContent = n.init;
+  document.getElementById('book-notary-name').textContent = n.name;
+  document.getElementById('book-notary-title').textContent = n.title;
+  bookList.innerHTML = n.svc.map(s => `
+    <div class="book-row" data-svc="${s}" onclick="toggleBookSvc('${s}')">
+      <div class="book-checkbox">
+        <svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="2,6 5,9.5 10,3"/>
+        </svg>
+      </div>
+      <span class="book-svc-name">${s}</span>
+      <span class="book-price">$${PRICES[s] ?? '—'}</span>
+    </div>
+  `).join('');
+  updateBookTotal();
+  bookOverlay.classList.add('open');
+}
+
+function toggleBookSvc(svc) {
+  if (bookSelected.has(svc)) bookSelected.delete(svc);
+  else bookSelected.add(svc);
+  bookList.querySelectorAll('.book-row').forEach(row => {
+    row.classList.toggle('checked', bookSelected.has(row.dataset.svc));
+  });
+  updateBookTotal();
+}
+
+function updateBookTotal() {
+  let sum = 0;
+  bookSelected.forEach(s => { sum += PRICES[s] ?? 0; });
+  const count = bookSelected.size;
+  bookTotal.innerHTML = `$${sum} <span>· ${count} service${count !== 1 ? 's' : ''}</span>`;
+  bookOrderBtn.disabled = count === 0;
+}
+
+const callOverlay = document.getElementById('call-overlay');
+function openCall(id, e) {
+  e.stopPropagation();
+  const n = NS.find(x => x.id === id);
+  if (!n) return;
+  document.getElementById('call-name').textContent = n.name;
+  document.getElementById('call-number').textContent = n.phone;
+  callOverlay.classList.add('open');
+}
+document.getElementById('call-cancel').addEventListener('click', () => callOverlay.classList.remove('open'));
+document.getElementById('call-confirm').addEventListener('click', () => callOverlay.classList.remove('open'));
+callOverlay.addEventListener('click', e => { if (e.target === callOverlay) callOverlay.classList.remove('open'); });
+
+document.getElementById('book-close').addEventListener('click', () => bookOverlay.classList.remove('open'));
+bookOverlay.addEventListener('click', e => { if (e.target === bookOverlay) bookOverlay.classList.remove('open'); });
+bookOrderBtn.addEventListener('click', () => {
+  alert(`Order placed for: ${[...bookSelected].join(', ')}`);
+  bookOverlay.classList.remove('open');
 });
 
 renderCards();
