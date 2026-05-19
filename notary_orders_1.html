@@ -275,6 +275,76 @@
   .toggle::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
   .toggle.on::after { transform: translateX(14px); }
 
+  /* ── Auth ── */
+  #auth { display: flex; flex-direction: column; overflow-y: auto; }
+  #auth::-webkit-scrollbar { display: none; }
+  .auth-header { padding: 0 22px 18px; flex-shrink: 0; }
+  .auth-title { font-size: 22px; font-weight: 600; letter-spacing: -.6px; color: #000; }
+  .auth-sub { font-size: 10px; color: #bbb; margin-top: 2px; }
+  .auth-tabs { display: flex; gap: 6px; padding: 0 22px 18px; flex-shrink: 0; }
+  .auth-tab {
+    flex: 1; padding: 9px 0;
+    font-family: 'DM Sans',sans-serif; font-size: 11px; font-weight: 600;
+    color: #888; background: #f5f5f5; border: none; border-radius: 999px;
+    cursor: pointer; transition: all .15s;
+  }
+  .auth-tab.active { background: #000; color: #fff; }
+  .auth-form { padding: 0 22px 24px; display: flex; flex-direction: column; gap: 12px; }
+  .auth-field { display: flex; flex-direction: column; gap: 5px; }
+  .auth-label { font-size: 9.5px; font-weight: 600; color: #888; letter-spacing: .4px; text-transform: uppercase; }
+  .auth-input, .auth-select {
+    border: 1px solid #e0e0e0; border-radius: 10px;
+    padding: 11px 13px; font-size: 12px;
+    font-family: 'DM Sans',sans-serif; color: #000;
+    background: #fff; outline: none; transition: border-color .15s;
+    width: 100%;
+  }
+  .auth-select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4' stroke-linecap='round'><polyline points='6 9 12 15 18 9'/></svg>"); background-repeat: no-repeat; background-position: right 13px center; padding-right: 32px; }
+  .auth-input:focus, .auth-select:focus { border-color: #000; }
+  .auth-input.invalid, .auth-select.invalid { border-color: #e05050; }
+  .auth-error { font-size: 9.5px; color: #e05050; }
+  .auth-forgot { font-size: 10px; color: #888; align-self: flex-start; background: none; border: none; padding: 0; cursor: pointer; font-family: 'DM Sans',sans-serif; margin-top: -4px; }
+  .auth-submit {
+    width: 100%; padding: 13px;
+    background: #000; color: #fff; border: none; border-radius: 12px;
+    font-size: 12px; font-weight: 600; font-family: 'DM Sans',sans-serif;
+    cursor: pointer; transition: background .15s; margin-top: 4px;
+  }
+  .auth-submit:disabled { background: #e0e0e0; color: #aaa; cursor: default; }
+
+  /* ── Services Onboarding ── */
+  #services { display: flex; flex-direction: column; }
+  .svc-nav { display: flex; align-items: center; gap: 10px; padding: 8px 18px 14px; flex-shrink: 0; }
+  .svc-scroll { flex: 1; overflow-y: auto; padding: 0 22px 24px; }
+  .svc-scroll::-webkit-scrollbar { display: none; }
+  .svc-header { margin-bottom: 18px; }
+  .svc-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+  .svc-opt {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 14px; background: #f9f9f9;
+    border: 1px solid #f0f0f0; border-radius: 12px;
+    cursor: pointer; transition: all .14s;
+  }
+  .svc-opt:hover { background: #f3f3f3; }
+  .svc-opt.selected { background: #fff; border-color: #000; }
+  .svc-box {
+    width: 20px; height: 20px; border-radius: 6px;
+    border: 1.5px solid #d0d0d0; background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all .14s;
+  }
+  .svc-opt.selected .svc-box { background: #000; border-color: #000; }
+  .svc-box svg { width: 11px; height: 11px; opacity: 0; transition: opacity .14s; }
+  .svc-opt.selected .svc-box svg { opacity: 1; }
+  .svc-opt-label { flex: 1; font-size: 12px; font-weight: 500; color: #000; letter-spacing: -.15px; }
+  .svc-continue {
+    width: 100%; padding: 13px;
+    background: #000; color: #fff; border: none; border-radius: 12px;
+    font-size: 12px; font-weight: 600; font-family: 'DM Sans',sans-serif;
+    cursor: pointer; transition: background .15s;
+  }
+  .svc-continue:disabled { background: #e0e0e0; color: #aaa; cursor: default; }
+
   /* ── Maps popup ── */
   .maps-overlay {
     position: absolute; inset: 0; z-index: 200;
@@ -314,8 +384,54 @@
   <div class="phone-screen">
     <div class="notch"></div>
 
+    <!-- AUTH -->
+    <div class="page active" id="auth">
+      <div class="status-bar">
+        <span class="time">9:41</span>
+        <div class="status-icons">
+          <svg width="14" height="10" viewBox="0 0 24 16" fill="currentColor"><rect x="0" y="8" width="4" height="8" rx="1"/><rect x="6" y="5" width="4" height="11" rx="1"/><rect x="12" y="2" width="4" height="14" rx="1"/><rect x="18" y="0" width="4" height="16" rx="1"/></svg>
+          <svg width="13" height="10" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1.5 7.5 C6 3 18 3 22.5 7.5"/><path d="M4.5 11 C7.5 8 16.5 8 19.5 11"/><path d="M8 14.5 C9.5 13 14.5 13 16 14.5"/><circle cx="12" cy="18" r="1.2" fill="currentColor"/></svg>
+          <svg width="22" height="10" viewBox="0 0 38 16" fill="none"><rect x="0.5" y="0.5" width="32" height="15" rx="4.5" stroke="currentColor" stroke-opacity=".35"/><rect x="2" y="2" width="26" height="12" rx="3" fill="currentColor"/><path d="M34 5.5v5c1.4-.7 1.4-4.3 0-5z" fill="currentColor" fill-opacity=".4"/></svg>
+        </div>
+      </div>
+      <div class="auth-header">
+        <div class="auth-title">Welcome</div>
+        <div class="auth-sub" id="auth-sub">Log in or create your notary account.</div>
+      </div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="auth-tab-login" onclick="switchAuthMode('login')">Log In</button>
+        <button class="auth-tab" id="auth-tab-signup" onclick="switchAuthMode('signup')">Sign Up</button>
+      </div>
+      <form class="auth-form" id="auth-form" onsubmit="submitAuth(event)" novalidate></form>
+    </div>
+
+    <!-- SERVICES ONBOARDING -->
+    <div class="page" id="services">
+      <div class="status-bar">
+        <span class="time">9:41</span>
+        <div class="status-icons">
+          <svg width="14" height="10" viewBox="0 0 24 16" fill="currentColor"><rect x="0" y="8" width="4" height="8" rx="1"/><rect x="6" y="5" width="4" height="11" rx="1"/><rect x="12" y="2" width="4" height="14" rx="1"/><rect x="18" y="0" width="4" height="16" rx="1"/></svg>
+          <svg width="13" height="10" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1.5 7.5 C6 3 18 3 22.5 7.5"/><path d="M4.5 11 C7.5 8 16.5 8 19.5 11"/><path d="M8 14.5 C9.5 13 14.5 13 16 14.5"/><circle cx="12" cy="18" r="1.2" fill="currentColor"/></svg>
+          <svg width="22" height="10" viewBox="0 0 38 16" fill="none"><rect x="0.5" y="0.5" width="32" height="15" rx="4.5" stroke="currentColor" stroke-opacity=".35"/><rect x="2" y="2" width="26" height="12" rx="3" fill="currentColor"/><path d="M34 5.5v5c1.4-.7 1.4-4.3 0-5z" fill="currentColor" fill-opacity=".4"/></svg>
+        </div>
+      </div>
+      <div class="svc-nav">
+        <button class="back-btn" onclick="goTo('auth','back')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+      </div>
+      <div class="svc-scroll">
+        <div class="svc-header">
+          <div class="page-title">What services do you offer?</div>
+          <div class="page-sub">Select all that apply. You can change these later in settings.</div>
+        </div>
+        <div class="svc-list" id="svc-list"></div>
+        <button class="svc-continue" id="svc-continue" disabled onclick="finishServices()">Continue</button>
+      </div>
+    </div>
+
     <!-- ORDERS -->
-    <div class="page active" id="orders">
+    <div class="page" id="orders">
       <div class="status-bar">
         <span class="time">9:41</span>
         <div class="status-icons">
@@ -469,7 +585,7 @@
     </div>
 
     <!-- TAB BAR -->
-    <div class="tab-bar">
+    <div class="tab-bar" id="tab-bar" style="display:none">
       <button class="tab-item active" id="tab-orders" onclick="goTo('orders')">
         <div class="tab-icon">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
@@ -511,6 +627,141 @@ const ORDERS = [
 let currentSeg = 'new';
 let activeOrderId = null;
 let pendingMapsOrderId = null;
+
+const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
+const SERVICE_OPTS = ["General Notarization","Mobile Notary (will travel)","Loan Signing","Apostille","Real Estate Closing","Wedding Officiation","Power of Attorney","Affidavits","Translations"];
+let authMode = 'login';
+let authTouched = {};
+let selectedServices = new Set();
+
+const SIGNUP_FIELDS = [
+  { name:'fullName',     label:'Full Name',                 type:'text',     placeholder:'Jane Doe' },
+  { name:'businessName', label:'Notary Business Name (optional)', type:'text', placeholder:'Doe Notary Services', optional:true },
+  { name:'email',        label:'Email',                     type:'email',    placeholder:'you@example.com' },
+  { name:'phone',        label:'Phone Number',              type:'tel',      placeholder:'(555) 123-4567' },
+  { name:'password',     label:'Password',                  type:'password', placeholder:'At least 8 characters' },
+  { name:'confirmPassword', label:'Confirm Password',       type:'password', placeholder:'Re-enter password' },
+  { name:'licenseNumber',label:'Notary License Number',     type:'text',     placeholder:'License #' },
+  { name:'state',        label:'State of Commission',       type:'select' },
+];
+const LOGIN_FIELDS = [
+  { name:'email',    label:'Email',    type:'email',    placeholder:'you@example.com' },
+  { name:'password', label:'Password', type:'password', placeholder:'Your password' },
+];
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function getAuthValues() {
+  const data = {};
+  document.querySelectorAll('#auth-form [data-field]').forEach(el => { data[el.dataset.field] = el.value; });
+  return data;
+}
+
+function validateAuthField(name, value, values) {
+  const v = (value ?? '').trim();
+  if (authMode === 'signup' && name === 'businessName') return null;
+  if (!v) return 'Required';
+  if (name === 'email' && !EMAIL_RE.test(v)) return 'Enter a valid email';
+  if (name === 'password' && v.length < 8) return 'Min 8 characters';
+  if (name === 'confirmPassword' && v !== (values.password ?? '')) return 'Passwords do not match';
+  return null;
+}
+
+function authIsValid() {
+  const vals = getAuthValues();
+  const fields = authMode === 'signup' ? SIGNUP_FIELDS : LOGIN_FIELDS;
+  return fields.every(f => !validateAuthField(f.name, vals[f.name], vals));
+}
+
+function renderAuthErrors(force) {
+  const vals = getAuthValues();
+  const fields = authMode === 'signup' ? SIGNUP_FIELDS : LOGIN_FIELDS;
+  fields.forEach(f => {
+    const input = document.querySelector(`#auth-form [data-field="${f.name}"]`);
+    const errEl = document.querySelector(`#auth-form [data-error="${f.name}"]`);
+    if (!input || !errEl) return;
+    const err = validateAuthField(f.name, vals[f.name], vals);
+    const show = err && (force || authTouched[f.name]);
+    input.classList.toggle('invalid', !!show);
+    errEl.textContent = show ? err : '';
+  });
+  const btn = document.getElementById('auth-submit');
+  if (btn) btn.disabled = !authIsValid();
+}
+
+function renderAuthForm() {
+  const form = document.getElementById('auth-form');
+  const fields = authMode === 'signup' ? SIGNUP_FIELDS : LOGIN_FIELDS;
+  const inputs = fields.map(f => {
+    if (f.type === 'select') {
+      const opts = ['<option value="" disabled selected>Select state</option>']
+        .concat(US_STATES.map(s => `<option value="${s}">${s}</option>`)).join('');
+      return `<div class="auth-field">
+        <label class="auth-label">${f.label}</label>
+        <select class="auth-select" data-field="${f.name}">${opts}</select>
+        <span class="auth-error" data-error="${f.name}"></span>
+      </div>`;
+    }
+    return `<div class="auth-field">
+      <label class="auth-label">${f.label}</label>
+      <input class="auth-input" type="${f.type}" placeholder="${f.placeholder||''}" data-field="${f.name}" autocomplete="off">
+      <span class="auth-error" data-error="${f.name}"></span>
+      ${authMode === 'login' && f.name === 'password' ? '<button type="button" class="auth-forgot">Forgot password?</button>' : ''}
+    </div>`;
+  }).join('');
+  form.innerHTML = inputs + `<button type="submit" class="auth-submit" id="auth-submit" disabled>${authMode === 'signup' ? 'Sign Up' : 'Log In'}</button>`;
+  authTouched = {};
+  form.querySelectorAll('[data-field]').forEach(el => {
+    el.addEventListener('input', () => renderAuthErrors(false));
+    el.addEventListener('change', () => renderAuthErrors(false));
+    el.addEventListener('blur', () => { authTouched[el.dataset.field] = true; renderAuthErrors(false); });
+  });
+  renderAuthErrors(false);
+}
+
+function switchAuthMode(mode) {
+  authMode = mode;
+  document.getElementById('auth-tab-login').classList.toggle('active', mode === 'login');
+  document.getElementById('auth-tab-signup').classList.toggle('active', mode === 'signup');
+  document.getElementById('auth-sub').textContent = mode === 'signup'
+    ? 'Create your notary account to start accepting orders.'
+    : 'Log in or create your notary account.';
+  renderAuthForm();
+}
+
+function submitAuth(e) {
+  e.preventDefault();
+  const fields = authMode === 'signup' ? SIGNUP_FIELDS : LOGIN_FIELDS;
+  fields.forEach(f => { authTouched[f.name] = true; });
+  renderAuthErrors(true);
+  if (!authIsValid()) return;
+  const payload = { mode: authMode, ...getAuthValues() };
+  console.log(payload);
+  if (authMode === 'signup') goTo('services');
+  else goTo('orders');
+}
+
+function renderServices() {
+  const list = document.getElementById('svc-list');
+  list.innerHTML = SERVICE_OPTS.map(s => `
+    <div class="svc-opt${selectedServices.has(s) ? ' selected' : ''}" onclick="toggleService('${s.replace(/'/g,"\\'")}')">
+      <div class="svc-box"><svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><polyline points="2,6 5,9.5 10,3"/></svg></div>
+      <span class="svc-opt-label">${s}</span>
+    </div>`).join('');
+  document.getElementById('svc-continue').disabled = selectedServices.size === 0;
+}
+
+function toggleService(s) {
+  if (selectedServices.has(s)) selectedServices.delete(s);
+  else selectedServices.add(s);
+  renderServices();
+}
+
+function finishServices() {
+  if (selectedServices.size === 0) return;
+  console.log({ services: [...selectedServices] });
+  goTo('orders');
+}
 
 const orderTotal = o => o.services.reduce((s, v) => s + (PRICES[v] ?? 0), 0);
 const isPast = o => ['past','done','decline'].includes(o.status);
@@ -672,9 +923,15 @@ function goTo(page, dir) {
   document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
   const tab = document.getElementById('tab-' + (page === 'detail' ? 'orders' : page));
   if (tab) tab.classList.add('active');
+  const hideTabs = page === 'auth' || page === 'services';
+  document.getElementById('tab-bar').style.display = hideTabs ? 'none' : 'flex';
   if (page === 'orders') renderOrders();
+  if (page === 'services') renderServices();
+  if (page === 'auth') renderAuthForm();
 }
 
+renderAuthForm();
+renderServices();
 renderOrders();
 updateBadge();
 </script>
