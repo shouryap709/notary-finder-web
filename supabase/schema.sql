@@ -137,5 +137,5 @@ create policy "bids: notary manages own bids"
 -- Added last so both tables already exist
 -- ============================================================
 alter table public.jobs
-  add constraint if not exists jobs_accepted_bid_id_fkey
+  add constraint jobs_accepted_bid_id_fkey
   foreign key (accepted_bid_id) references public.bids(id) on delete set null;
