@@ -762,7 +762,15 @@
   .toast-wrap.on {
     opacity: 1; transform: translateX(-50%) translateY(0);
   }
+
+  /* ============================================================
+     Loading state — applied to submit buttons during async ops
+     ============================================================ */
+  .btn-loading { opacity: .6; pointer-events: none; }
 </style>
+
+<!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -999,6 +1007,12 @@
             </div>
           </div>
 
+          <div class="field" id="jf-password-field">
+            <label class="field-label" for="jf-password">Password <span style="color:#ccc;font-weight:400;">(min 6 chars — saves your account)</span></label>
+            <input type="password" id="jf-password" class="field-input" placeholder="Create a password to track your job">
+            <div class="field-error">Enter at least 6 characters.</div>
+          </div>
+
           <div class="step-foot">
             <span class="step-foot-meta">Step 5 of 5</span>
             <div class="step-foot-actions">
@@ -1154,6 +1168,11 @@
         <input type="text" id="nl-license" class="field-input" placeholder="NP-123456">
         <div class="field-error">Enter your notary license number.</div>
       </div>
+      <div class="field" id="nl-password-field">
+        <label class="field-label" for="nl-password">Password <span style="color:#ccc;font-weight:400;">(min 6 chars)</span></label>
+        <input type="password" id="nl-password" class="field-input" placeholder="Create or sign in with a password">
+        <div class="field-error">Enter at least 6 characters.</div>
+      </div>
       <div class="field" id="nl-terms-field">
         <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
           <input type="checkbox" id="nl-terms" style="margin-top:2px;flex-shrink:0;">
@@ -1241,6 +1260,25 @@
 </div>
 
 <script>
+/* ================================================================
+   SUPABASE CONFIG
+   Paste your Project URL and anon (publishable) key here.
+   Leave both as empty strings to run in offline / demo mode —
+   everything still works via localStorage.
+   ================================================================ */
+window.SUPABASE_CONFIG = {
+  url:     '',   // e.g. 'https://xyzxyzxyz.supabase.co'
+  anonKey: ''    // e.g. 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+};
+
+/* Supabase client — null when unconfigured (offline / demo mode) */
+const sb = (window.SUPABASE_CONFIG.url && window.SUPABASE_CONFIG.anonKey)
+  ? supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPABASE_CONFIG.anonKey)
+  : null;
+
+/* Active Supabase auth user — populated on boot and after sign-in */
+let sbUser = null;
+
 /* ================================================================
    STATE — single source of truth for the entire app.
    Persisted to localStorage so the demo survives refreshes.
@@ -1655,28 +1693,38 @@ function validateStep(step) {
   } else if (step === 5) {
     ok = flag('jf-name', $name.value.trim().length > 0) && ok;
     ok = flag('jf-email', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test($email.value)) && ok;
+    // Password required only when Supabase is wired up
+    if (sb) {
+      const pw = document.getElementById('jf-password');
+      ok = flag('jf-password', !!pw && pw.value.length >= 6) && ok;
+    }
   }
   return ok;
 }
 
 /* ----- Final submit (only fires from step 5's submit button) ----- */
-$jobForm.addEventListener('submit', e => {
+$jobForm.addEventListener('submit', async e => {
   e.preventDefault();
   // Re-validate every step in case the user navigated weirdly.
   for (let s = 1; s <= TOTAL_STEPS; s++) {
     if (!validateStep(s)) { goToStep(s); return; }
   }
 
+  const submitBtn = $jobForm.querySelector('[type="submit"]');
+  setLoading(submitBtn, true);
+
   const services = [...selectedServices];
   const job = {
     id: uid('j'),
     customerName: $name.value.trim(),
     customerEmail: $email.value.trim(),
-    services,                           // canonical array
-    serviceType: services[0] || '',     // legacy single field for backwards compat
+    services,                             // canonical array
+    serviceType: services[0] || '',       // legacy single field for backwards compat
     signatures: +$signatures.value,
     notaryPreference: currentPref,
     location: $location.value.trim(),
+    locationLat:  jobLocation.lat,        // set by Leaflet geocoder
+    locationLng:  jobLocation.lng,
     dateTime: $datetime.value,
     notes: $notes.value.trim(),
     startingPrice: +$price.value,
@@ -1686,13 +1734,30 @@ $jobForm.addEventListener('submit', e => {
     postedAt: Date.now(),
     isUserJob: true
   };
+
+  // Authenticate the customer when Supabase is configured
+  if (sb) {
+    const pw = document.getElementById('jf-password')?.value || '';
+    try {
+      await sbAuthCustomer(job.customerEmail, pw, job.customerName);
+    } catch (err) {
+      toast('Sign-in failed: ' + (err.message || 'check your password'));
+      setLoading(submitBtn, false);
+      return;
+    }
+  }
+
   STATE.jobs.push(job);
   STATE.currentUser = { name: job.customerName, email: job.customerEmail };
   saveState();
 
+  // Write to Supabase in the background — UI is not blocked
+  sbSaveJob(job).catch(err => console.warn('[Supabase] job save failed:', err));
+
   // Simulate a few notaries bidding on this fresh job over the next few seconds.
   seedBidsForUserJob(job);
 
+  setLoading(submitBtn, false);
   toast('Job posted — notaries are bidding now');
   goTo('my-job');
 });
@@ -1936,6 +2001,10 @@ function acceptBid(bidId) {
     if (b.jobId === job.id) b.status = (b.id === bid.id) ? 'accepted' : 'lost';
   });
   saveState();
+
+  // Mirror to Supabase (non-blocking)
+  sbAcceptBid(job.id, bid.id).catch(err => console.warn('[Supabase] accept bid:', err));
+
   toast(`Bid accepted — ${bid.notaryName} confirmed`);
   renderMyJob();
 }
@@ -1943,9 +2012,14 @@ function acceptBid(bidId) {
 function cancelUserJob() {
   const job = findUserJob();
   if (!job) return;
+  const jobId = job.id;
   STATE.jobs = STATE.jobs.filter(j => j.id !== job.id);
   STATE.bids = STATE.bids.filter(b => b.jobId !== job.id);
   saveState();
+
+  // Mirror to Supabase (non-blocking)
+  sbCancelJob(jobId).catch(err => console.warn('[Supabase] cancel job:', err));
+
   toast('Job cancelled');
   renderMyJob();
 }
@@ -2092,7 +2166,7 @@ function closeBidModal() {
 document.getElementById('bm-close').addEventListener('click', closeBidModal);
 $bidOverlay.addEventListener('click', e => { if (e.target === $bidOverlay) closeBidModal(); });
 
-$bmSubmit.addEventListener('click', () => {
+$bmSubmit.addEventListener('click', async () => {
   const job = STATE.jobs.find(j => j.id === activeBidJobId);
   if (!job) return;
   const price = +$bmPrice.value;
@@ -2111,16 +2185,25 @@ $bmSubmit.addEventListener('click', () => {
   }
   field.classList.remove('has-error');
 
-  const me = STATE.notaries.find(n => n.id === STATE.notaryUser.id);
+  // Use the real signed-in notary when Supabase is active, else fall back to demo notary
+  const me = notarySession
+    ? { id: sbUser?.id || STATE.notaryUser.id, name: notarySession.name,
+        rating: 5.0, reviews: 0, distance: '—' }
+    : STATE.notaries.find(n => n.id === STATE.notaryUser.id);
+  if (!me) return;
+
+  setLoading($bmSubmit, true);
 
   // If the notary has already bid on this job, update the existing bid.
   const existing = STATE.bids.find(b => b.jobId === job.id && b.notaryId === me.id);
+  let targetBid;
   if (existing) {
     existing.price = price;
     existing.message = $bmMessage.value.trim();
     existing.placedAt = Date.now();
+    targetBid = existing;
   } else {
-    STATE.bids.push({
+    targetBid = {
       id: uid('b'),
       jobId: job.id,
       notaryId: me.id,
@@ -2132,10 +2215,15 @@ $bmSubmit.addEventListener('click', () => {
       message: $bmMessage.value.trim(),
       status: 'pending',
       placedAt: Date.now()
-    });
+    };
+    STATE.bids.push(targetBid);
   }
   saveState();
 
+  // Mirror to Supabase (non-blocking)
+  sbSaveBid(targetBid).catch(err => console.warn('[Supabase] bid save:', err));
+
+  setLoading($bmSubmit, false);
   closeBidModal();
   toast(existing ? 'Bid updated' : 'Bid placed');
   renderDashboard();
@@ -2248,17 +2336,17 @@ function onNotaryContinueWeb() {
 }
 
 /* ================================================================
-   NOTARY LOGIN — placeholder front-end auth
+   NOTARY LOGIN — front-end auth (Supabase when configured, else demo)
    ================================================================ */
-function submitNotaryLogin() {
-  const nameEl    = document.getElementById('nl-name');
-  const emailEl   = document.getElementById('nl-email');
-  const phoneEl   = document.getElementById('nl-phone');
-  const licenseEl = document.getElementById('nl-license');
-  const termsEl   = document.getElementById('nl-terms');
+async function submitNotaryLogin() {
+  const nameEl     = document.getElementById('nl-name');
+  const emailEl    = document.getElementById('nl-email');
+  const phoneEl    = document.getElementById('nl-phone');
+  const licenseEl  = document.getElementById('nl-license');
+  const termsEl    = document.getElementById('nl-terms');
+  const passwordEl = document.getElementById('nl-password');
 
   let ok = true;
-
   function nlFlag(fieldId, valid) {
     document.getElementById(fieldId).classList.toggle('has-error', !valid);
     if (!valid) ok = false;
@@ -2269,8 +2357,26 @@ function submitNotaryLogin() {
   nlFlag('nl-phone-field',   phoneEl.value.trim().length > 0);
   nlFlag('nl-license-field', licenseEl.value.trim().length > 0);
   nlFlag('nl-terms-field',   termsEl.checked);
+  if (sb) nlFlag('nl-password-field', passwordEl.value.length >= 6);
 
   if (!ok) return;
+
+  const btn = document.querySelector('#notary-login .btn-primary');
+  setLoading(btn, true);
+
+  if (sb) {
+    try {
+      await sbAuthNotary(emailEl.value.trim(), passwordEl.value, {
+        name:    nameEl.value.trim(),
+        phone:   phoneEl.value.trim(),
+        license: licenseEl.value.trim()
+      });
+    } catch (err) {
+      toast('Sign-in failed: ' + (err.message || 'check your password'));
+      setLoading(btn, false);
+      return;
+    }
+  }
 
   notarySession = {
     name:    nameEl.value.trim(),
@@ -2279,6 +2385,7 @@ function submitNotaryLogin() {
     license: licenseEl.value.trim()
   };
 
+  setLoading(btn, false);
   goTo('notary-dashboard');
 }
 
@@ -2308,7 +2415,234 @@ function renderNotaryHeaderPill() {
 
 function signOutNotary() {
   notarySession = null;
+  sbSignOut().catch(err => console.warn('[Supabase] sign out:', err));
   setMode('customer');
+}
+
+/* ================================================================
+   SUPABASE — auth helpers
+   ================================================================ */
+
+async function sbGetSession() {
+  if (!sb) return null;
+  const { data: { session } } = await sb.auth.getSession();
+  sbUser = session?.user ?? null;
+  return session;
+}
+
+/* Sign up as customer (falls back to sign-in if email already exists) */
+async function sbAuthCustomer(email, password, name) {
+  if (!sb) return null;
+  const { data: upData, error: upErr } = await sb.auth.signUp({ email, password });
+  if (!upErr && upData.user && !upData.user.identities?.length === 0) {
+    // New account — create profile row
+    await sb.from('profiles').upsert({
+      id: upData.user.id, role: 'customer', full_name: name, email
+    });
+    sbUser = upData.user;
+    return upData.user;
+  }
+  // Email already registered — sign in instead
+  const { data: inData, error: inErr } = await sb.auth.signInWithPassword({ email, password });
+  if (inErr) throw inErr;
+  sbUser = inData.user;
+  return inData.user;
+}
+
+/* Sign up as notary (falls back to sign-in if email already exists) */
+async function sbAuthNotary(email, password, profile) {
+  if (!sb) return null;
+  const { data: upData, error: upErr } = await sb.auth.signUp({ email, password });
+  if (!upErr && upData.user && !upData.user.identities?.length === 0) {
+    await sb.from('profiles').upsert({
+      id: upData.user.id, role: 'notary',
+      full_name: profile.name, email,
+      phone: profile.phone, license_number: profile.license
+    });
+    sbUser = upData.user;
+    return upData.user;
+  }
+  const { data: inData, error: inErr } = await sb.auth.signInWithPassword({ email, password });
+  if (inErr) throw inErr;
+  sbUser = inData.user;
+  return inData.user;
+}
+
+async function sbSignOut() {
+  if (!sb) return;
+  await sb.auth.signOut();
+  sbUser = null;
+}
+
+/* ================================================================
+   SUPABASE — data layer
+   ================================================================ */
+
+/* Map in-memory job → DB row shape */
+function jobToRow(job) {
+  return {
+    customer_id:      sbUser?.id || null,
+    service_type:     jobPrimaryService(job),
+    services:         jobServices(job),
+    signatures:       job.signatures,
+    notary_preference: job.notaryPreference,
+    location_address: job.location,
+    location_lat:     job.locationLat ?? null,
+    location_lng:     job.locationLng ?? null,
+    date_time:        job.dateTime || null,
+    notes:            job.notes || null,
+    starting_price:   job.startingPrice,
+    suggested_price:  job.suggestedPrice,
+    status:           job.status,
+    accepted_bid_id:  job.acceptedBidId || null
+  };
+}
+
+/* Map DB row → in-memory job shape */
+function rowToJob(row) {
+  return {
+    id:               row.id,
+    customerName:     row.profiles?.full_name  || '',
+    customerEmail:    row.profiles?.email       || '',
+    services:         row.services || (row.service_type ? [row.service_type] : []),
+    serviceType:      row.service_type || '',
+    signatures:       row.signatures || 1,
+    notaryPreference: row.notary_preference || 'Mobile',
+    location:         row.location_address || '',
+    locationLat:      row.location_lat || null,
+    locationLng:      row.location_lng || null,
+    dateTime:         row.date_time ? new Date(row.date_time).toISOString().slice(0, 16) : '',
+    notes:            row.notes || '',
+    startingPrice:    Number(row.starting_price) || 0,
+    suggestedPrice:   Number(row.suggested_price) || 0,
+    status:           row.status || 'open',
+    acceptedBidId:    row.accepted_bid_id || null,
+    postedAt:         new Date(row.created_at).getTime(),
+    isUserJob:        row.customer_id === (sbUser?.id || '__nobody__')
+  };
+}
+
+/* Map DB bid row → in-memory bid shape */
+function rowToBid(row) {
+  const profile = row.profiles || {};
+  return {
+    id:            row.id,
+    jobId:         row.job_id,
+    notaryId:      row.notary_id,
+    notaryName:    profile.full_name   || 'Notary',
+    notaryRating:  Number(profile.rating) || 4.5,
+    notaryReviews: profile.reviews_count   || 0,
+    distance:      '—',
+    price:         Number(row.price),
+    message:       row.message || '',
+    status:        row.status,
+    placedAt:      new Date(row.created_at).getTime()
+  };
+}
+
+/* Fetch jobs + bids from Supabase and merge into STATE.
+   Supabase rows take priority; seed-only rows (not in DB) are kept. */
+async function sbHydrate() {
+  if (!sb) return;
+  try {
+    const [jobsRes, bidsRes] = await Promise.all([
+      sb.from('jobs')
+        .select('*, profiles!customer_id(full_name, email)')
+        .order('created_at', { ascending: false }),
+      sb.from('bids')
+        .select('*, profiles!notary_id(full_name, rating, reviews_count)')
+        .order('created_at', { ascending: false })
+    ]);
+
+    if (!jobsRes.error && jobsRes.data?.length) {
+      const sbJobs   = jobsRes.data.map(rowToJob);
+      const sbJobIds = new Set(sbJobs.map(j => j.id));
+      const seedOnly = STATE.jobs.filter(j => !sbJobIds.has(j.id));
+      STATE.jobs = [...sbJobs, ...seedOnly];
+    }
+
+    if (!bidsRes.error && bidsRes.data?.length) {
+      const sbBids   = bidsRes.data.map(rowToBid);
+      const sbBidIds = new Set(sbBids.map(b => b.id));
+      const seedOnly = STATE.bids.filter(b => !sbBidIds.has(b.id));
+      STATE.bids = [...sbBids, ...seedOnly];
+    }
+
+    saveState();
+  } catch (e) {
+    console.warn('[Supabase] hydrate failed — using localStorage:', e);
+  }
+}
+
+/* INSERT a new job. Updates in-memory job.id with the DB-assigned UUID. */
+async function sbSaveJob(job) {
+  if (!sb || !sbUser) return;
+  const { data, error } = await sb.from('jobs').insert(jobToRow(job)).select().single();
+  if (error) { console.warn('[Supabase] job insert:', error); return; }
+  if (data) {
+    // Sync the id back so future Supabase calls reference the real UUID
+    const mem = STATE.jobs.find(j => j === job);
+    if (mem) mem.id = data.id;
+    saveState();
+  }
+}
+
+/* INSERT or UPDATE a bid. Looks up existing DB bid by job+notary first. */
+async function sbSaveBid(bid) {
+  if (!sb || !sbUser) return;
+  const { data: existing } = await sb.from('bids')
+    .select('id')
+    .eq('job_id', bid.jobId)
+    .eq('notary_id', sbUser.id)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await sb.from('bids')
+      .update({ price: bid.price, message: bid.message, status: bid.status })
+      .eq('id', existing.id);
+    if (error) console.warn('[Supabase] bid update:', error);
+    else bid.id = existing.id;
+  } else {
+    const { data, error } = await sb.from('bids').insert({
+      job_id:    bid.jobId,
+      notary_id: sbUser.id,
+      price:     bid.price,
+      message:   bid.message || null,
+      status:    bid.status
+    }).select().single();
+    if (error) console.warn('[Supabase] bid insert:', error);
+    else if (data) bid.id = data.id;
+  }
+}
+
+/* Accept a bid — update job status + mark other bids as lost */
+async function sbAcceptBid(jobId, bidId) {
+  if (!sb || !sbUser) return;
+  const [jobRes, bidRes] = await Promise.all([
+    sb.from('jobs').update({ status: 'accepted', accepted_bid_id: bidId }).eq('id', jobId),
+    sb.from('bids').update({ status: 'accepted' }).eq('id', bidId)
+  ]);
+  await sb.from('bids').update({ status: 'lost' }).eq('job_id', jobId).neq('id', bidId);
+  if (jobRes.error) console.warn('[Supabase] accept job update:', jobRes.error);
+  if (bidRes.error) console.warn('[Supabase] accept bid update:', bidRes.error);
+}
+
+/* DELETE a job (cascades to its bids via DB constraint) */
+async function sbCancelJob(jobId) {
+  if (!sb || !sbUser) return;
+  const { error } = await sb.from('jobs').delete().eq('id', jobId);
+  if (error) console.warn('[Supabase] cancel job:', error);
+}
+
+/* ================================================================
+   UI helper — loading state for async submit buttons
+   ================================================================ */
+function setLoading(btn, loading) {
+  if (!btn) return;
+  btn.disabled = loading;
+  btn.classList.toggle('btn-loading', loading);
+  if (loading) { btn.dataset.origText = btn.textContent; btn.textContent = 'Saving…'; }
+  else btn.textContent = btn.dataset.origText || btn.textContent;
 }
 
 /* ================================================================
@@ -2326,17 +2660,36 @@ function toast(msg) {
 /* ================================================================
    Boot
    ================================================================ */
-seedIfEmpty();
-renderStepper();
-updateSuggested();
-// Always boot in customer mode — notary session is in-memory only and
-// auto-showing the app modal on every page load would be jarring.
-STATE.currentMode = 'customer';
-saveState();
-document.querySelectorAll('.mode-toggle button').forEach(btn => {
-  btn.classList.toggle('on', btn.dataset.mode === 'customer');
-});
-goTo('home');
+(async () => {
+  // Restore Supabase session before rendering anything
+  if (sb) {
+    const session = await sbGetSession();
+    if (session) sbUser = session.user;
+  }
+
+  seedIfEmpty();
+  renderStepper();
+  updateSuggested();
+  // Always boot in customer mode — notary session is in-memory only and
+  // auto-showing the app modal on every page load would be jarring.
+  STATE.currentMode = 'customer';
+  saveState();
+  document.querySelectorAll('.mode-toggle button').forEach(btn => {
+    btn.classList.toggle('on', btn.dataset.mode === 'customer');
+  });
+  goTo('home');
+
+  // Hydrate from Supabase in the background — doesn't block the UI.
+  // On success, re-render whatever page is currently active.
+  if (sb) {
+    sbHydrate().then(() => {
+      const activeId = document.querySelector('.page.active')?.id;
+      if (activeId === 'my-job')           renderMyJob();
+      if (activeId === 'notary-dashboard') renderDashboard();
+      if (activeId === 'my-bids')          renderMyBids();
+    }).catch(err => console.warn('[Supabase] background hydrate error:', err));
+  }
+})();
 </script>
 </body>
 </html>
