@@ -767,10 +767,28 @@
      Loading state — applied to submit buttons during async ops
      ============================================================ */
   .btn-loading { opacity: .6; pointer-events: none; }
+
+  /* ============================================================
+     Leaflet map — customer location picker (step 2)
+     ============================================================ */
+  #jf-map {
+    height: 200px;
+    border-radius: 7px;
+    border: 1px solid #e2e2e2;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  /* Keep Leaflet attribution readable at small size */
+  #jf-map .leaflet-control-attribution {
+    font-size: 8px;
+  }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Leaflet (CDN) — customer location picker map -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -907,6 +925,7 @@
             <label class="field-label" for="jf-location">Address or ZIP code</label>
             <input type="text" id="jf-location" class="field-input" placeholder="123 Main St, San Jose, CA 95126" required>
             <div class="field-error">Enter your address or ZIP.</div>
+            <div id="jf-map"></div>
           </div>
 
           <div class="field">
@@ -1581,6 +1600,8 @@ function goToStep(n) {
   renderStepper();
   // Bring the form to the top so step panels start clean.
   document.getElementById('post-job').scrollTop = 0;
+  // Init / repaint the location map when step 2 becomes visible
+  if (currentStep === 2) setTimeout(initLocationMap, 80);
 }
 
 function nextStep() {
@@ -1663,6 +1684,10 @@ function resetPostJobForm() {
   updateServicesCount();
   updateSuggested();
   $jobForm.querySelectorAll('.field').forEach(f => f.classList.remove('has-error'));
+  // Clear geocoded location
+  jobLocation.lat = null;
+  jobLocation.lng = null;
+  if (leafletMarker) { leafletMarker.remove(); leafletMarker = null; }
   goToStep(1);
 }
 
@@ -2418,6 +2443,62 @@ function signOutNotary() {
   sbSignOut().catch(err => console.warn('[Supabase] sign out:', err));
   setMode('customer');
 }
+
+/* ================================================================
+   LEAFLET MAP — customer location picker (step 2)
+   Geocodes via OSM Nominatim — no API key needed.
+   ================================================================ */
+
+let leafletMap    = null;   // L.Map instance, created lazily
+let leafletMarker = null;   // current pin
+let geocodeTimer  = null;   // debounce handle
+
+/* Stores the geocoded co-ordinates so they can be saved to the jobs row */
+const jobLocation = { lat: null, lng: null };
+
+function initLocationMap() {
+  if (!window.L) return;           // Leaflet not loaded (e.g. offline)
+  if (leafletMap) {
+    leafletMap.invalidateSize();   // repaint after panel becomes visible
+    return;
+  }
+  // Default centre: San Jose, CA
+  leafletMap = L.map('jf-map', { zoomControl: true }).setView([37.3382, -121.8863], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(leafletMap);
+}
+
+async function geocodeAddress(query) {
+  if (!query.trim() || !window.L) return;
+  if (!leafletMap) initLocationMap();
+  try {
+    const res = await fetch(
+      'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' +
+        encodeURIComponent(query),
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const data = await res.json();
+    if (!data.length) return;
+
+    const lat = parseFloat(data[0].lat);
+    const lng = parseFloat(data[0].lon);
+    jobLocation.lat = lat;
+    jobLocation.lng = lng;
+
+    leafletMap.setView([lat, lng], 14);
+    if (leafletMarker) leafletMarker.remove();
+    leafletMarker = L.marker([lat, lng]).addTo(leafletMap);
+  } catch (e) {
+    console.warn('[Nominatim] geocode error:', e);
+  }
+}
+
+// Attach the 600 ms debounce once $location is defined
+$location.addEventListener('input', () => {
+  clearTimeout(geocodeTimer);
+  geocodeTimer = setTimeout(() => geocodeAddress($location.value), 600);
+});
 
 /* ================================================================
    SUPABASE — auth helpers
