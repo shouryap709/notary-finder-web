@@ -682,6 +682,24 @@
   .status-pending { background: #fff7e0; color: #97720c; }
   .status-accepted { background: #e6f3ec; color: #1d7a4d; }
   .status-lost { background: #f5f5f5; color: #888; }
+
+  /* ============================================================
+     Realtime connection dot — top-right of screen
+     ============================================================ */
+  #rt-dot {
+    position: absolute; top: 8px; right: 8px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #ccc; transition: background .5s;
+    z-index: 20; pointer-events: none;
+  }
+  #rt-dot.live { background: #2db075; }
+
+  /* New-bid flash — yellow fade for realtime-injected bid cards */
+  @keyframes bid-flash {
+    0%   { background: #fffbe5; }
+    100% { background: transparent; }
+  }
+  .bid-card.rt-new { animation: bid-flash 1.5s ease-out forwards; }
   .status-outbid { background: #fdecec; color: #b03333; }
 
   /* ============================================================
@@ -861,6 +879,7 @@
 <div class="scene">
 <div class="laptop-lid">
 <div class="screen">
+  <div id="rt-dot" title="Realtime connection"></div>
 
   <!-- ============================================================
        Toast notifier — shared across all pages
@@ -1680,15 +1699,40 @@ function jobPrimaryService(job) {
    Routing — same goTo() pattern as the original mockup
    ================================================================ */
 function goTo(pageId) {
+  const prevId = document.querySelector('.page.active')?.id;
+
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const page = document.getElementById(pageId);
   if (page) { page.classList.add('active'); page.scrollTop = 0; }
+
+  // Realtime lifecycle — unsubscribe channels no longer needed.
+  if (sb) {
+    const notaryPages = new Set(['notary-dashboard', 'my-bids']);
+    if (prevId === 'my-job' && pageId !== 'my-job') {
+      const job = findUserJob();
+      if (job) sbRealtime.unsubscribe('job:' + job.id);
+    }
+    if (notaryPages.has(prevId) && !notaryPages.has(pageId)) {
+      sbRealtime.unsubscribe('open-jobs');
+    }
+  }
 
   // Re-render dynamic pages on entry.
   if (pageId === 'my-job') renderMyJob();
   if (pageId === 'notary-dashboard') { renderDashboard(); renderNotaryHeaderPill(); }
   if (pageId === 'my-bids') { renderMyBids(); renderNotaryHeaderPill(); }
   if (pageId === 'post-job') resetPostJobForm();
+
+  // Realtime lifecycle — subscribe for live updates.
+  if (sb) {
+    if (pageId === 'my-job') {
+      const job = findUserJob();
+      if (job) sbRealtime.subscribeToJob(job.id);
+    }
+    if (pageId === 'notary-dashboard' || pageId === 'my-bids') {
+      sbRealtime.subscribeToOpenJobs();
+    }
+  }
 }
 
 /* ================================================================
@@ -2035,7 +2079,7 @@ function pickMessage(job) {
 /* ================================================================
    MY JOB — render the customer's job + live bids
    ================================================================ */
-function renderMyJob() {
+function renderMyJob(opts = {}) {
   const root = document.getElementById('my-job-content');
   const job = findUserJob();
 
@@ -2101,12 +2145,12 @@ function renderMyJob() {
   // Confirmed-state OR live bids
   const bidsSection = acceptedBid
     ? renderConfirmedCard(acceptedBid, job)
-    : renderLiveBids(bids, job);
+    : renderLiveBids(bids, job, opts.newBidId || null);
 
   root.innerHTML = statusBanner + summaryHTML + bidsSection;
 }
 
-function renderLiveBids(bids, job) {
+function renderLiveBids(bids, job, newBidId = null) {
   if (bids.length === 0) {
     return `
       <div class="section-label">Live bids <span class="count">waiting…</span></div>
@@ -2118,7 +2162,7 @@ function renderLiveBids(bids, job) {
   }
 
   const cards = bids.map((bid, i) => `
-    <div class="bid-card${i === 0 ? ' best' : ''}">
+    <div class="bid-card${i === 0 ? ' best' : ''}${bid.id === newBidId ? ' rt-new' : ''}">
       ${i === 0 ? '<div class="bid-best-tag">Best Price</div>' : ''}
       <div class="bid-row">
         <div class="bid-avatar">${initialsFor(bid.notaryName)}</div>
@@ -2655,6 +2699,7 @@ function renderNotaryHeaderPill() {
 
 function signOutNotary() {
   notarySession = null;
+  sbRealtime.unsubscribeAll();
   sbSignOut().catch(err => console.warn('[Supabase] sign out:', err));
   setMode('customer');
 }
@@ -2819,6 +2864,7 @@ async function sbAuthNotary(email, password, profile) {
 
 async function sbSignOut() {
   if (!sb) return;
+  sbRealtime.unsubscribeAll();
   await sb.auth.signOut();
   sbUser = null;
 }
@@ -3008,6 +3054,167 @@ async function sbCancelJob(jobId) {
     console.warn('[Supabase] cancel job:', e);
   }
 }
+
+/* ================================================================
+   SUPABASE REALTIME — live bid/job updates
+   ================================================================ */
+const sbRealtime = (() => {
+  // Map<channelName, { channel, retryTimer }>
+  const _ch = new Map();
+
+  function _dot(live) {
+    const d = document.getElementById('rt-dot');
+    if (d) d.className = live ? 'live' : '';
+  }
+
+  function _removeChannel(name) {
+    const entry = _ch.get(name);
+    if (!entry) return;
+    clearTimeout(entry.retryTimer);
+    sb.removeChannel(entry.channel);
+    _ch.delete(name);
+  }
+
+  function _onStatus(name, status, resubFn) {
+    console.log('[Realtime]', name, status);
+    if (status === 'SUBSCRIBED') {
+      _dot(true);
+    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      _dot(false);
+      const entry = _ch.get(name);
+      if (entry) {
+        clearTimeout(entry.retryTimer);
+        entry.retryTimer = setTimeout(() => {
+          console.log('[Realtime] retrying', name);
+          _removeChannel(name);
+          resubFn();
+        }, 2000);
+      }
+    }
+  }
+
+  function _activeId() {
+    return document.querySelector('.page.active')?.id;
+  }
+
+  function _rerender(opts = {}) {
+    const id = _activeId();
+    if (id === 'my-job')           renderMyJob(opts);
+    if (id === 'notary-dashboard') renderDashboard();
+    if (id === 'my-bids')          renderMyBidsList();
+  }
+
+  function subscribeToJob(jobId) {
+    if (!sb) return () => {};
+    const name = 'job:' + jobId;
+    if (_ch.has(name)) return () => unsubscribe(name);
+
+    const channel = sb.channel(name)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'bids',
+        filter: `job_id=eq.${jobId}`
+      }, async ({ eventType, new: row, old: oldRow }) => {
+        if (eventType === 'INSERT') {
+          // Skip bids already in STATE (we just submitted them ourselves)
+          if (STATE.bids.find(b => b.id === row.id)) return;
+
+          // Fetch notary profile — realtime payloads don't include joins
+          let profile = {};
+          const { data } = await sb.from('profiles')
+            .select('full_name, rating, reviews_count')
+            .eq('id', row.notary_id).single();
+          if (data) profile = data;
+
+          STATE.bids.push({
+            id:            row.id,
+            jobId:         row.job_id,
+            notaryId:      row.notary_id,
+            notaryName:    profile.full_name      || 'Notary',
+            notaryRating:  Number(profile.rating)  || 4.5,
+            notaryReviews: profile.reviews_count   || 0,
+            distance:      '—',
+            price:         Number(row.price),
+            message:       row.message || '',
+            status:        row.status,
+            placedAt:      new Date(row.created_at).getTime()
+          });
+          saveState();
+          _rerender({ newBidId: row.id });
+
+        } else if (eventType === 'UPDATE') {
+          const b = STATE.bids.find(b => b.id === row.id);
+          if (b) { b.price = Number(row.price); b.status = row.status; b.message = row.message || b.message; }
+          // Toast notary if their bid just went lost (customer accepted another)
+          if (row.status === 'lost' && notarySession) {
+            const myId = sbUser?.id || STATE.notaryUser?.id;
+            if (row.notary_id === myId) toast('Customer accepted another bid');
+          }
+          saveState();
+          _rerender();
+
+        } else if (eventType === 'DELETE') {
+          STATE.bids = STATE.bids.filter(b => b.id !== oldRow.id);
+          saveState();
+          _rerender();
+        }
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'jobs',
+        filter: `id=eq.${jobId}`
+      }, ({ new: row }) => {
+        const j = STATE.jobs.find(j => j.id === row.id);
+        if (j) { j.status = row.status; j.acceptedBidId = row.accepted_bid_id || null; }
+        saveState();
+        _rerender();
+      })
+      .subscribe(status => _onStatus(name, status, () => subscribeToJob(jobId)));
+
+    _ch.set(name, { channel, retryTimer: null });
+    return () => unsubscribe(name);
+  }
+
+  function subscribeToOpenJobs() {
+    if (!sb) return () => {};
+    const name = 'open-jobs';
+    if (_ch.has(name)) return () => unsubscribe(name);
+
+    const channel = sb.channel(name)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'jobs'
+      }, ({ new: row }) => {
+        if (STATE.jobs.find(j => j.id === row.id)) return;
+        STATE.jobs.push(rowToJob(row));
+        saveState();
+        _rerender();
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'jobs'
+      }, ({ new: row }) => {
+        const j = STATE.jobs.find(j => j.id === row.id);
+        if (j) { j.status = row.status; j.acceptedBidId = row.accepted_bid_id || null; }
+        saveState();
+        _rerender();
+      })
+      .subscribe(status => _onStatus(name, status, subscribeToOpenJobs));
+
+    _ch.set(name, { channel, retryTimer: null });
+    return () => unsubscribe(name);
+  }
+
+  function unsubscribe(name) {
+    if (!sb) return;
+    _removeChannel(name);
+    if (_ch.size === 0) _dot(false);
+  }
+
+  function unsubscribeAll() {
+    if (!sb) return;
+    for (const name of [..._ch.keys()]) _removeChannel(name);
+    _dot(false);
+  }
+
+  return { subscribeToJob, subscribeToOpenJobs, unsubscribe, unsubscribeAll };
+})();
 
 /* ================================================================
    PASSWORD RESET flow
