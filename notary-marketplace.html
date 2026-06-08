@@ -851,6 +851,10 @@
 <!-- Leaflet (CDN) — customer location picker map -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Sentry (CDN) — error monitoring -->
+<script src="https://unpkg.com/@sentry/browser@8/build/bundles/bundle.min.js" crossorigin="anonymous"></script>
+<!-- PostHog (CDN) — product analytics -->
+<script src="https://us-assets.i.posthog.com/static/array.js"></script>
 </head>
 <body>
 
@@ -1431,6 +1435,14 @@ window.LEGAL_URLS = {
   privacy: ''    // e.g. 'https://app.termly.io/document/privacy-policy/...'
 };
 
+/* ================================================================
+   MONITORING — Sentry DSN + PostHog project key
+   Leave empty to disable (safe for local dev / offline demo).
+   ================================================================ */
+window.SENTRY_DSN   = '';  // e.g. 'https://abc123@o0.ingest.sentry.io/0'
+window.POSTHOG_KEY  = '';  // e.g. 'phc_...'
+window.POSTHOG_HOST = 'https://us.i.posthog.com';
+
 /* Supabase client — null when unconfigured (offline / demo mode) */
 const sb = (window.SUPABASE_CONFIG.url && window.SUPABASE_CONFIG.anonKey)
   ? supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPABASE_CONFIG.anonKey)
@@ -1438,6 +1450,33 @@ const sb = (window.SUPABASE_CONFIG.url && window.SUPABASE_CONFIG.anonKey)
 
 /* Active Supabase auth user — populated on boot and after sign-in */
 let sbUser = null;
+
+/* ================================================================
+   MONITORING — Sentry + PostHog init + thin wrappers
+   ================================================================ */
+function initMonitoring() {
+  if (window.SENTRY_DSN && window.Sentry?.init) {
+    Sentry.init({ dsn: window.SENTRY_DSN, tracesSampleRate: 0.1 });
+  }
+  if (window.POSTHOG_KEY && window.posthog?.init) {
+    posthog.init(window.POSTHOG_KEY, { api_host: window.POSTHOG_HOST, autocapture: false });
+  }
+}
+
+/* Capture an exception to Sentry (no-op if not configured) */
+function sentryCapture(err) {
+  if (window.Sentry && window.SENTRY_DSN) Sentry.captureException(err);
+}
+
+/* Identify an authenticated user in PostHog — no PII in event props */
+function phIdentify(user, role) {
+  if (window.posthog && window.POSTHOG_KEY) posthog.identify(user.id, { role });
+}
+
+/* Fire a PostHog event (no-op if not configured) */
+function phCapture(event, props) {
+  if (window.posthog && window.POSTHOG_KEY) posthog.capture(event, props || {});
+}
 
 /* ================================================================
    STATE — single source of truth for the entire app.
@@ -2699,49 +2738,67 @@ async function sbGetSession() {
    email confirmation before a session is granted. */
 async function sbAuthCustomer(email, password, name) {
   if (!sb) return null;
-  const { data: upData, error: upErr } = await sb.auth.signUp({ email, password });
-  if (!upErr && upData.user) {
-    if (!upData.session) {
-      // Email confirmation pending — no session yet, don't create profile
-      return { pendingVerification: true, email };
+  try {
+    const { data: upData, error: upErr } = await sb.auth.signUp({ email, password });
+    if (!upErr && upData.user) {
+      if (!upData.session) {
+        // Email confirmation pending — no session yet, don't create profile
+        return { pendingVerification: true, email };
+      }
+      // Auto-confirm enabled — session granted immediately
+      await sb.from('profiles').upsert({
+        id: upData.user.id, role: 'customer', full_name: name, email,
+        terms_accepted_at: new Date().toISOString()
+      });
+      sbUser = upData.user;
+      phIdentify(upData.user, 'customer');
+      phCapture('signup_completed', { role: 'customer' });
+      return upData.user;
     }
-    // Auto-confirm enabled — session granted immediately
-    await sb.from('profiles').upsert({
-      id: upData.user.id, role: 'customer', full_name: name, email,
-      terms_accepted_at: new Date().toISOString()
-    });
-    sbUser = upData.user;
-    return upData.user;
+    // Email already registered — sign in instead
+    const { data: inData, error: inErr } = await sb.auth.signInWithPassword({ email, password });
+    if (inErr) throw inErr;
+    sbUser = inData.user;
+    phIdentify(inData.user, 'customer');
+    return inData.user;
+  } catch (e) {
+    sentryCapture(e);
+    phCapture('auth_failed', { error: e.message });
+    throw e;
   }
-  // Email already registered — sign in instead
-  const { data: inData, error: inErr } = await sb.auth.signInWithPassword({ email, password });
-  if (inErr) throw inErr;
-  sbUser = inData.user;
-  return inData.user;
 }
 
 /* Sign up as notary (falls back to sign-in if email already exists).
    Returns { pendingVerification: true, email } when confirmation pending. */
 async function sbAuthNotary(email, password, profile) {
   if (!sb) return null;
-  const { data: upData, error: upErr } = await sb.auth.signUp({ email, password });
-  if (!upErr && upData.user) {
-    if (!upData.session) {
-      return { pendingVerification: true, email };
+  try {
+    const { data: upData, error: upErr } = await sb.auth.signUp({ email, password });
+    if (!upErr && upData.user) {
+      if (!upData.session) {
+        return { pendingVerification: true, email };
+      }
+      await sb.from('profiles').upsert({
+        id: upData.user.id, role: 'notary',
+        full_name: profile.name, email,
+        phone: profile.phone, license_number: profile.license,
+        terms_accepted_at: new Date().toISOString()
+      });
+      sbUser = upData.user;
+      phIdentify(upData.user, 'notary');
+      phCapture('signup_completed', { role: 'notary' });
+      return upData.user;
     }
-    await sb.from('profiles').upsert({
-      id: upData.user.id, role: 'notary',
-      full_name: profile.name, email,
-      phone: profile.phone, license_number: profile.license,
-      terms_accepted_at: new Date().toISOString()
-    });
-    sbUser = upData.user;
-    return upData.user;
+    const { data: inData, error: inErr } = await sb.auth.signInWithPassword({ email, password });
+    if (inErr) throw inErr;
+    sbUser = inData.user;
+    phIdentify(inData.user, 'notary');
+    return inData.user;
+  } catch (e) {
+    sentryCapture(e);
+    phCapture('auth_failed', { error: e.message });
+    throw e;
   }
-  const { data: inData, error: inErr } = await sb.auth.signInWithPassword({ email, password });
-  if (inErr) throw inErr;
-  sbUser = inData.user;
-  return inData.user;
 }
 
 async function sbSignOut() {
@@ -2853,61 +2910,86 @@ async function sbHydrate() {
 /* INSERT a new job. Updates in-memory job.id with the DB-assigned UUID. */
 async function sbSaveJob(job) {
   if (!sb || !sbUser) return;
-  const { data, error } = await sb.from('jobs').insert(jobToRow(job)).select().single();
-  if (error) { console.warn('[Supabase] job insert:', error); return; }
-  if (data) {
-    // Sync the id back so future Supabase calls reference the real UUID
-    const mem = STATE.jobs.find(j => j === job);
-    if (mem) mem.id = data.id;
-    saveState();
+  try {
+    const { data, error } = await sb.from('jobs').insert(jobToRow(job)).select().single();
+    if (error) throw error;
+    if (data) {
+      // Sync the id back so future Supabase calls reference the real UUID
+      const mem = STATE.jobs.find(j => j === job);
+      if (mem) mem.id = data.id;
+      saveState();
+      phCapture('job_posted', { service_type: job.serviceType || jobPrimaryService(job), price: job.startingPrice });
+    }
+  } catch (e) {
+    sentryCapture(e);
+    console.warn('[Supabase] job insert:', e);
   }
 }
 
 /* INSERT or UPDATE a bid. Looks up existing DB bid by job+notary first. */
 async function sbSaveBid(bid) {
   if (!sb || !sbUser) return;
-  const { data: existing } = await sb.from('bids')
-    .select('id')
-    .eq('job_id', bid.jobId)
-    .eq('notary_id', sbUser.id)
-    .maybeSingle();
+  try {
+    const { data: existing } = await sb.from('bids')
+      .select('id')
+      .eq('job_id', bid.jobId)
+      .eq('notary_id', sbUser.id)
+      .maybeSingle();
 
-  if (existing) {
-    const { error } = await sb.from('bids')
-      .update({ price: bid.price, message: bid.message, status: bid.status })
-      .eq('id', existing.id);
-    if (error) console.warn('[Supabase] bid update:', error);
-    else bid.id = existing.id;
-  } else {
-    const { data, error } = await sb.from('bids').insert({
-      job_id:    bid.jobId,
-      notary_id: sbUser.id,
-      price:     bid.price,
-      message:   bid.message || null,
-      status:    bid.status
-    }).select().single();
-    if (error) console.warn('[Supabase] bid insert:', error);
-    else if (data) bid.id = data.id;
+    if (existing) {
+      const { error } = await sb.from('bids')
+        .update({ price: bid.price, message: bid.message, status: bid.status })
+        .eq('id', existing.id);
+      if (error) throw error;
+      bid.id = existing.id;
+    } else {
+      const { data, error } = await sb.from('bids').insert({
+        job_id:    bid.jobId,
+        notary_id: sbUser.id,
+        price:     bid.price,
+        message:   bid.message || null,
+        status:    bid.status
+      }).select().single();
+      if (error) throw error;
+      if (data) {
+        bid.id = data.id;
+        phCapture('bid_placed', { job_id: bid.jobId, price: bid.price });
+      }
+    }
+  } catch (e) {
+    sentryCapture(e);
+    console.warn('[Supabase] bid save:', e);
   }
 }
 
 /* Accept a bid — update job status + mark other bids as lost */
 async function sbAcceptBid(jobId, bidId) {
   if (!sb || !sbUser) return;
-  const [jobRes, bidRes] = await Promise.all([
-    sb.from('jobs').update({ status: 'accepted', accepted_bid_id: bidId }).eq('id', jobId),
-    sb.from('bids').update({ status: 'accepted' }).eq('id', bidId)
-  ]);
-  await sb.from('bids').update({ status: 'lost' }).eq('job_id', jobId).neq('id', bidId);
-  if (jobRes.error) console.warn('[Supabase] accept job update:', jobRes.error);
-  if (bidRes.error) console.warn('[Supabase] accept bid update:', bidRes.error);
+  try {
+    const [jobRes, bidRes] = await Promise.all([
+      sb.from('jobs').update({ status: 'accepted', accepted_bid_id: bidId }).eq('id', jobId),
+      sb.from('bids').update({ status: 'accepted' }).eq('id', bidId)
+    ]);
+    await sb.from('bids').update({ status: 'lost' }).eq('job_id', jobId).neq('id', bidId);
+    if (jobRes.error) throw jobRes.error;
+    if (bidRes.error) throw bidRes.error;
+    phCapture('bid_accepted');
+  } catch (e) {
+    sentryCapture(e);
+    console.warn('[Supabase] accept bid:', e);
+  }
 }
 
 /* DELETE a job (cascades to its bids via DB constraint) */
 async function sbCancelJob(jobId) {
   if (!sb || !sbUser) return;
-  const { error } = await sb.from('jobs').delete().eq('id', jobId);
-  if (error) console.warn('[Supabase] cancel job:', error);
+  try {
+    const { error } = await sb.from('jobs').delete().eq('id', jobId);
+    if (error) throw error;
+  } catch (e) {
+    sentryCapture(e);
+    console.warn('[Supabase] cancel job:', e);
+  }
 }
 
 /* ================================================================
@@ -3015,6 +3097,8 @@ function toast(msg) {
    Boot
    ================================================================ */
 (async () => {
+  initMonitoring();
+
   // Listen for auth events before getSession() so PASSWORD_RECOVERY fires
   if (sb) {
     sb.auth.onAuthStateChange((event, session) => {
