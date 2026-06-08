@@ -769,6 +769,50 @@
   .btn-loading { opacity: .6; pointer-events: none; }
 
   /* ============================================================
+     Inline auth notices — email verification + reset confirmations
+     ============================================================ */
+  .auth-notice {
+    background: #f0f7ff; border: 1px solid #cde0f5;
+    border-radius: 7px; padding: 10px 13px;
+    font-size: 9.5px; color: #2a5a8a; line-height: 1.65;
+    margin-top: 10px;
+  }
+  .auth-notice.error { background: #fff5f5; border-color: #f5d0d0; color: #8a2020; }
+  .auth-notice strong { font-weight: 600; }
+
+  /* Forgot-password mini-form */
+  .forgot-link {
+    display: block; font-size: 9px; color: #bbb;
+    background: none; border: none; cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    text-align: right; margin-top: 5px; padding: 0;
+    transition: color .14s;
+  }
+  .forgot-link:hover { color: #555; }
+  .reset-wrap {
+    margin-top: 10px; padding: 12px 13px;
+    background: #fafafa; border: 1px solid #ebebeb;
+    border-radius: 7px;
+  }
+  .reset-wrap-title { font-size: 10px; font-weight: 600; color: #000; margin-bottom: 8px; }
+  .reset-row { display: flex; gap: 7px; }
+  .reset-input {
+    flex: 1; font-family: 'DM Sans', sans-serif;
+    font-size: 11px; color: #000; padding: 8px 11px;
+    background: #fff; border: 1px solid #e2e2e2;
+    border-radius: 6px; outline: none; transition: border-color .15s;
+  }
+  .reset-input:focus { border-color: #000; }
+  .reset-btn {
+    font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 600;
+    background: #000; color: #fff; border: none; cursor: pointer;
+    padding: 8px 14px; border-radius: 6px; white-space: nowrap;
+    transition: background .15s;
+  }
+  .reset-btn:hover { background: #222; }
+  .reset-btn:disabled { background: #ccc; cursor: default; }
+
+  /* ============================================================
      Leaflet map — customer location picker (step 2)
      ============================================================ */
   #jf-map {
@@ -1031,6 +1075,16 @@
             <input type="password" id="jf-password" class="field-input" placeholder="Create a password to track your job">
             <div class="field-error">Enter at least 6 characters.</div>
           </div>
+          <button class="forgot-link" type="button" onclick="toggleResetForm('jf')">Forgot password?</button>
+          <div class="reset-wrap" id="jf-reset-wrap" style="display:none;">
+            <div class="reset-wrap-title">Reset your password</div>
+            <div class="reset-row">
+              <input type="email" class="reset-input" id="jf-reset-email" placeholder="your@email.com">
+              <button type="button" class="reset-btn" id="jf-reset-btn" onclick="sendPasswordReset('jf')">Send reset link</button>
+            </div>
+            <div class="auth-notice" id="jf-reset-notice" style="display:none;margin-top:8px;"></div>
+          </div>
+          <div class="auth-notice" id="jf-verify-notice" style="display:none;"></div>
 
           <div class="step-foot">
             <span class="step-foot-meta">Step 5 of 5</span>
@@ -1192,6 +1246,16 @@
         <input type="password" id="nl-password" class="field-input" placeholder="Create or sign in with a password">
         <div class="field-error">Enter at least 6 characters.</div>
       </div>
+      <button class="forgot-link" type="button" onclick="toggleResetForm('nl')">Forgot password?</button>
+      <div class="reset-wrap" id="nl-reset-wrap" style="display:none;">
+        <div class="reset-wrap-title">Reset your password</div>
+        <div class="reset-row">
+          <input type="email" class="reset-input" id="nl-reset-email" placeholder="your@email.com">
+          <button type="button" class="reset-btn" id="nl-reset-btn" onclick="sendPasswordReset('nl')">Send reset link</button>
+        </div>
+        <div class="auth-notice" id="nl-reset-notice" style="display:none;margin-top:8px;"></div>
+      </div>
+      <div class="auth-notice" id="nl-verify-notice" style="display:none;"></div>
       <div class="field" id="nl-terms-field">
         <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
           <input type="checkbox" id="nl-terms" style="margin-top:2px;flex-shrink:0;">
@@ -1249,6 +1313,32 @@
       <div class="modal-foot">
         <button class="btn btn-primary" id="bm-submit" style="width:100%;">Submit Bid</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       PAGE: SET NEW PASSWORD — shown when URL contains #type=recovery
+       ============================================================ -->
+  <div class="page" id="set-password">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+    </div>
+    <div class="form-shell" style="max-width:420px;">
+      <div class="page-title">Set new password</div>
+      <div class="page-subtitle">Enter your new password below.</div>
+      <div class="field" id="sp-password-field">
+        <label class="field-label" for="sp-password">New password</label>
+        <input type="password" id="sp-password" class="field-input" placeholder="Min 6 characters">
+        <div class="field-error">Enter at least 6 characters.</div>
+      </div>
+      <div class="field" id="sp-confirm-field">
+        <label class="field-label" for="sp-confirm">Confirm password</label>
+        <input type="password" id="sp-confirm" class="field-input" placeholder="Repeat password">
+        <div class="field-error">Passwords don't match.</div>
+      </div>
+      <div class="auth-notice" id="sp-notice" style="display:none;"></div>
+      <button class="btn btn-primary" style="width:100%;margin-top:12px;" id="sp-submit" onclick="submitPasswordUpdate()">Update Password</button>
     </div>
   </div>
 
@@ -1764,7 +1854,16 @@ $jobForm.addEventListener('submit', async e => {
   if (sb) {
     const pw = document.getElementById('jf-password')?.value || '';
     try {
-      await sbAuthCustomer(job.customerEmail, pw, job.customerName);
+      const result = await sbAuthCustomer(job.customerEmail, pw, job.customerName);
+      if (result?.pendingVerification) {
+        const notice = document.getElementById('jf-verify-notice');
+        if (notice) {
+          notice.innerHTML = `Check your email — we sent a confirmation link to <strong>${escapeHTML(result.email)}</strong>. Click it to verify your account, then return here to post your job.`;
+          notice.style.display = 'block';
+        }
+        setLoading(submitBtn, false);
+        return;
+      }
     } catch (err) {
       toast('Sign-in failed: ' + (err.message || 'check your password'));
       setLoading(submitBtn, false);
@@ -2391,11 +2490,20 @@ async function submitNotaryLogin() {
 
   if (sb) {
     try {
-      await sbAuthNotary(emailEl.value.trim(), passwordEl.value, {
+      const result = await sbAuthNotary(emailEl.value.trim(), passwordEl.value, {
         name:    nameEl.value.trim(),
         phone:   phoneEl.value.trim(),
         license: licenseEl.value.trim()
       });
+      if (result?.pendingVerification) {
+        const notice = document.getElementById('nl-verify-notice');
+        if (notice) {
+          notice.innerHTML = `Check your email — we sent a confirmation link to <strong>${escapeHTML(result.email)}</strong>. Click it to verify your account, then sign in again.`;
+          notice.style.display = 'block';
+        }
+        setLoading(btn, false);
+        return;
+      }
     } catch (err) {
       toast('Sign-in failed: ' + (err.message || 'check your password'));
       setLoading(btn, false);
@@ -2511,12 +2619,18 @@ async function sbGetSession() {
   return session;
 }
 
-/* Sign up as customer (falls back to sign-in if email already exists) */
+/* Sign up as customer (falls back to sign-in if email already exists).
+   Returns { pendingVerification: true, email } when Supabase requires
+   email confirmation before a session is granted. */
 async function sbAuthCustomer(email, password, name) {
   if (!sb) return null;
   const { data: upData, error: upErr } = await sb.auth.signUp({ email, password });
-  if (!upErr && upData.user && !upData.user.identities?.length === 0) {
-    // New account — create profile row
+  if (!upErr && upData.user) {
+    if (!upData.session) {
+      // Email confirmation pending — no session yet, don't create profile
+      return { pendingVerification: true, email };
+    }
+    // Auto-confirm enabled — session granted immediately
     await sb.from('profiles').upsert({
       id: upData.user.id, role: 'customer', full_name: name, email
     });
@@ -2530,11 +2644,15 @@ async function sbAuthCustomer(email, password, name) {
   return inData.user;
 }
 
-/* Sign up as notary (falls back to sign-in if email already exists) */
+/* Sign up as notary (falls back to sign-in if email already exists).
+   Returns { pendingVerification: true, email } when confirmation pending. */
 async function sbAuthNotary(email, password, profile) {
   if (!sb) return null;
   const { data: upData, error: upErr } = await sb.auth.signUp({ email, password });
-  if (!upErr && upData.user && !upData.user.identities?.length === 0) {
+  if (!upErr && upData.user) {
+    if (!upData.session) {
+      return { pendingVerification: true, email };
+    }
     await sb.from('profiles').upsert({
       id: upData.user.id, role: 'notary',
       full_name: profile.name, email,
@@ -2716,6 +2834,84 @@ async function sbCancelJob(jobId) {
 }
 
 /* ================================================================
+   PASSWORD RESET flow
+   ================================================================ */
+
+function toggleResetForm(prefix) {
+  const wrap = document.getElementById(prefix + '-reset-wrap');
+  if (!wrap) return;
+  const opening = wrap.style.display === 'none';
+  wrap.style.display = opening ? 'block' : 'none';
+  if (opening) {
+    // Pre-fill the reset email from the nearby email field
+    const srcId = prefix === 'jf' ? 'jf-email' : 'nl-email';
+    const srcEl = document.getElementById(srcId);
+    const destEl = document.getElementById(prefix + '-reset-email');
+    if (srcEl?.value && destEl) destEl.value = srcEl.value;
+    destEl?.focus();
+  }
+}
+
+async function sendPasswordReset(prefix) {
+  const notice = document.getElementById(prefix + '-reset-notice');
+  const emailEl = document.getElementById(prefix + '-reset-email');
+  const btn = document.getElementById(prefix + '-reset-btn');
+
+  function showNotice(msg, isError) {
+    notice.innerHTML = msg;
+    notice.className = 'auth-notice' + (isError ? ' error' : '');
+    notice.style.display = 'block';
+  }
+
+  if (!sb) { showNotice('Supabase not configured.', true); return; }
+  const email = emailEl?.value.trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showNotice('Enter a valid email address.', true);
+    return;
+  }
+
+  setLoading(btn, true);
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.href
+  });
+  setLoading(btn, false);
+
+  if (error) showNotice(escapeHTML(error.message), true);
+  else showNotice('Reset link sent. Check your email.');
+}
+
+/* Called from the #set-password page after the user returns via reset link */
+async function submitPasswordUpdate() {
+  const pwEl  = document.getElementById('sp-password');
+  const cfEl  = document.getElementById('sp-confirm');
+  const notice = document.getElementById('sp-notice');
+  const btn   = document.getElementById('sp-submit');
+
+  const pwField = pwEl.closest('.field');
+  const cfField = cfEl.closest('.field');
+  pwField.classList.remove('has-error');
+  cfField.classList.remove('has-error');
+
+  if (pwEl.value.length < 6) { pwField.classList.add('has-error'); return; }
+  if (pwEl.value !== cfEl.value) { cfField.classList.add('has-error'); return; }
+
+  setLoading(btn, true);
+  const { error } = await sb.auth.updateUser({ password: pwEl.value });
+  setLoading(btn, false);
+
+  notice.style.display = 'block';
+  if (error) {
+    notice.textContent = error.message;
+    notice.className = 'auth-notice error';
+  } else {
+    notice.innerHTML = 'Password updated. <strong>You\'re now signed in.</strong>';
+    notice.className = 'auth-notice';
+    btn.style.display = 'none';
+    setTimeout(() => goTo('home'), 1800);
+  }
+}
+
+/* ================================================================
    UI helper — loading state for async submit buttons
    ================================================================ */
 function setLoading(btn, loading) {
@@ -2742,6 +2938,17 @@ function toast(msg) {
    Boot
    ================================================================ */
 (async () => {
+  // Listen for auth events before getSession() so PASSWORD_RECOVERY fires
+  if (sb) {
+    sb.auth.onAuthStateChange((event, session) => {
+      sbUser = session?.user ?? null;
+      if (event === 'PASSWORD_RECOVERY') {
+        // User clicked the reset link — show the set-new-password page
+        goTo('set-password');
+      }
+    });
+  }
+
   // Restore Supabase session before rendering anything
   if (sb) {
     const session = await sbGetSession();
