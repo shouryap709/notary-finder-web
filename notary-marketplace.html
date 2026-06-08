@@ -1343,11 +1343,12 @@
         <form id="bid-form" novalidate>
           <div class="field">
             <label class="field-label" for="bm-price">Your bid</label>
+            <div id="bm-ceiling-hint" style="font-size:9.5px;color:#aaa;margin-top:-2px;margin-bottom:5px;">Ceiling: —</div>
             <div class="price-input-wrap">
               <span>$</span>
               <input type="number" id="bm-price" min="1" max="9999" required>
             </div>
-            <div class="field-error" id="bm-price-error">Bid must be lower than the customer's max.</div>
+            <div class="field-error" id="bm-price-error"></div>
           </div>
           <div class="field" style="margin-bottom:0;">
             <label class="field-label" for="bm-message">Message (optional)</label>
@@ -2345,6 +2346,7 @@ const $bmPrice = document.getElementById('bm-price');
 const $bmMessage = document.getElementById('bm-message');
 const $bmSubmit = document.getElementById('bm-submit');
 const $bmPriceErr = document.getElementById('bm-price-error');
+const $bmCeilingHint = document.getElementById('bm-ceiling-hint');
 
 let activeBidJobId = null;
 
@@ -2361,6 +2363,7 @@ function openBidModal(jobId) {
   $bmMax.textContent = '$' + job.startingPrice;
   $bmLowest.textContent = lowest ? '$' + lowest : 'No bids yet';
   $bmDistance.textContent = me ? me.distance : '—';
+  $bmCeilingHint.textContent = `Must be under $${job.startingPrice} (customer's starting price)`;
 
   // Prefill: $1 less than lowest if any, else $5 less than max — simple heuristic
   const prefill = lowest ? Math.max(15, lowest - 1) : Math.max(15, job.startingPrice - 5);
@@ -2386,21 +2389,22 @@ $bmSubmit.addEventListener('click', async () => {
   if (!job) return;
   const price = +$bmPrice.value;
   const field = $bmPrice.closest('.field');
+  const ceiling = job.startingPrice;
 
-  // Validation: price must be a positive number lower than the customer's max.
+  // Client-side ceiling validation — blocks before any state mutation.
   if (!price || price < 1) {
     $bmPriceErr.textContent = 'Enter a valid bid amount.';
     field.classList.add('has-error');
     return;
   }
-  if (price >= job.startingPrice) {
-    $bmPriceErr.textContent = `Bid must be lower than $${job.startingPrice}.`;
+  if (price >= ceiling) {
+    $bmPriceErr.textContent = `Your bid must be lower than the customer's $${ceiling} starting price.`;
     field.classList.add('has-error');
     return;
   }
   field.classList.remove('has-error');
 
-  // Use the real signed-in notary when Supabase is active, else fall back to demo notary
+  // Use the real signed-in notary when Supabase is active, else fall back to demo notary.
   const me = notarySession
     ? { id: sbUser?.id || STATE.notaryUser.id, name: notarySession.name,
         rating: 5.0, reviews: 0, distance: '—' }
@@ -2409,34 +2413,46 @@ $bmSubmit.addEventListener('click', async () => {
 
   setLoading($bmSubmit, true);
 
-  // If the notary has already bid on this job, update the existing bid.
+  // Optimistic state update — rolled back if Supabase rejects.
   const existing = STATE.bids.find(b => b.jobId === job.id && b.notaryId === me.id);
   let targetBid;
+  let rollback = () => {};
+
   if (existing) {
+    const prev = { price: existing.price, message: existing.message, placedAt: existing.placedAt };
+    rollback = () => { existing.price = prev.price; existing.message = prev.message; existing.placedAt = prev.placedAt; };
     existing.price = price;
     existing.message = $bmMessage.value.trim();
     existing.placedAt = Date.now();
     targetBid = existing;
   } else {
     targetBid = {
-      id: uid('b'),
-      jobId: job.id,
-      notaryId: me.id,
-      notaryName: me.name,
-      notaryRating: me.rating,
-      notaryReviews: me.reviews,
-      distance: me.distance,
-      price,
-      message: $bmMessage.value.trim(),
-      status: 'pending',
-      placedAt: Date.now()
+      id: uid('b'), jobId: job.id, notaryId: me.id,
+      notaryName: me.name, notaryRating: me.rating, notaryReviews: me.reviews,
+      distance: me.distance, price, message: $bmMessage.value.trim(),
+      status: 'pending', placedAt: Date.now()
     };
     STATE.bids.push(targetBid);
+    rollback = () => { STATE.bids = STATE.bids.filter(b => b !== targetBid); };
   }
   saveState();
 
-  // Mirror to Supabase (non-blocking)
-  sbSaveBid(targetBid).catch(err => console.warn('[Supabase] bid save:', err));
+  // Await Supabase — surface ceiling violation inline; rollback optimistic state on any error.
+  try {
+    await sbSaveBid(targetBid);
+  } catch (err) {
+    rollback();
+    saveState();
+    const msg = err?.message || '';
+    if (msg.includes('less than job ceiling') || msg.includes('ceiling')) {
+      $bmPriceErr.textContent = `Your bid must be lower than the customer's $${ceiling} starting price.`;
+      field.classList.add('has-error');
+    } else {
+      toast('Failed to save bid — please try again.');
+    }
+    setLoading($bmSubmit, false);
+    return;
+  }
 
   setLoading($bmSubmit, false);
   closeBidModal();
@@ -2959,6 +2975,7 @@ async function sbSaveBid(bid) {
   } catch (e) {
     sentryCapture(e);
     console.warn('[Supabase] bid save:', e);
+    throw e;  // rethrow so submit handler can surface ceiling violations inline
   }
 }
 
