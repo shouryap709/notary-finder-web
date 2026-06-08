@@ -817,6 +817,24 @@
   .auth-notice strong { font-weight: 600; }
 
   /* Forgot-password mini-form */
+  /* ============================================================
+     File upload inputs
+     ============================================================ */
+  .file-upload-wrap { margin-top: 4px; }
+  .file-upload-label {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 9.5px; color: #777; cursor: pointer;
+    padding: 6px 10px; border: 1px dashed #ddd; border-radius: var(--radius-sm);
+    background: #fafafa; transition: border-color .14s, background .14s;
+  }
+  .file-upload-label:hover { border-color: #bbb; background: #f5f5f5; }
+  .file-upload-label svg { flex-shrink: 0; }
+  .file-upload-label input[type="file"] { display: none; }
+  .file-selected-name { font-size: 9px; color: #555; margin-top: 4px; }
+  .upload-progress { font-size: 9px; color: #777; margin-top: 4px; min-height: 14px; }
+  .upload-progress.error { color: var(--accent-red); }
+  .upload-progress.success { color: var(--accent-green); }
+
   .forgot-link {
     display: block; font-size: 9px; color: #bbb;
     background: none; border: none; cursor: pointer;
@@ -1103,6 +1121,33 @@
              Step 5 — Contact
              ============================================================ -->
         <div class="step-panel" data-step="5">
+          <div class="step-heading">Attach a document <span style="font-size:11px;color:#aaa;font-weight:400;">(optional)</span></div>
+          <div class="step-subheading">If you have the document ready, upload it now. Your notary will be able to view it after accepting the bid.</div>
+
+          <div class="field" id="jf-doc-field">
+            <label class="field-label">Document file <span style="color:#ccc;font-weight:400;">(PDF or image, max 10MB)</span></label>
+            <div class="file-upload-wrap">
+              <label class="file-upload-label" id="jf-doc-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span id="jf-doc-btn-text">Choose file…</span>
+                <input type="file" id="jf-doc-file" accept=".pdf,.jpg,.jpeg,.png" onchange="onDocFileChange(this)">
+              </label>
+              <div class="file-selected-name" id="jf-doc-file-name" style="display:none;"></div>
+              <div class="upload-progress" id="jf-doc-progress"></div>
+            </div>
+          </div>
+
+          <div class="step-foot">
+            <span class="step-foot-meta">Step 5 of 6 — optional</span>
+            <div class="step-foot-actions">
+              <button type="button" class="btn btn-secondary" data-step-prev>Back</button>
+              <button type="button" class="btn btn-ghost" data-step-next>Skip</button>
+              <button type="button" class="btn btn-primary" data-step-next>Continue</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-panel" data-step="6">
           <div class="step-heading">How do we reach you?</div>
           <div class="step-subheading">Notaries will contact you here when they accept your job.</div>
 
@@ -1147,7 +1192,7 @@
           </div>
 
           <div class="step-foot">
-            <span class="step-foot-meta">Step 5 of 5</span>
+            <span class="step-foot-meta">Step 6 of 6</span>
             <div class="step-foot-actions">
               <button type="button" class="btn btn-secondary" data-step-prev>Back</button>
               <button type="submit" class="btn btn-primary" id="jf-submit-btn" disabled>Post Job</button>
@@ -1300,6 +1345,18 @@
         <label class="field-label" for="nl-license">Notary License Number</label>
         <input type="text" id="nl-license" class="field-input" placeholder="NP-123456">
         <div class="field-error">Enter your notary license number.</div>
+      </div>
+      <div class="field" id="nl-license-file-field">
+        <label class="field-label">Commission certificate <span style="color:#ccc;font-weight:400;">(PDF or image, max 10MB — optional)</span></label>
+        <div class="file-upload-wrap">
+          <label class="file-upload-label" id="nl-license-file-label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span id="nl-license-file-btn-text">Choose file…</span>
+            <input type="file" id="nl-license-file" accept=".pdf,.jpg,.jpeg,.png" onchange="onLicenseFileChange(this)">
+          </label>
+          <div class="file-selected-name" id="nl-license-file-name" style="display:none;"></div>
+          <div class="upload-progress" id="nl-upload-progress"></div>
+        </div>
       </div>
       <div class="field" id="nl-password-field">
         <label class="field-label" for="nl-password">Password <span style="color:#ccc;font-weight:400;">(min 6 chars)</span></label>
@@ -1474,6 +1531,87 @@ let sbUser = null;
 /* ================================================================
    MONITORING — Sentry + PostHog init + thin wrappers
    ================================================================ */
+/* ================================================================
+   FILE UPLOAD — helpers + UI handlers
+   ================================================================ */
+const ALLOWED_MIME = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+const MAX_FILE_BYTES = 10 * 1024 * 1024;  // 10 MB
+
+/* Validate + upload a file to Supabase Storage.
+   onProgress(msg) receives status strings for UI display. */
+async function uploadFile(bucket, path, file, onProgress) {
+  if (!sb) return { path: null, error: new Error('Supabase not configured') };
+  if (file.size > MAX_FILE_BYTES) return { path: null, error: new Error('File exceeds 10 MB limit') };
+  if (!ALLOWED_MIME.has(file.type)) return { path: null, error: new Error('Only PDF, JPG, or PNG allowed') };
+  if (onProgress) onProgress('Uploading…');
+  const { data, error } = await sb.storage.from(bucket).upload(path, file, { upsert: false });
+  if (error) return { path: null, error };
+  if (onProgress) onProgress('');
+  return { path: data.path, error: null };
+}
+
+/* Get a short-lived signed URL for a private storage object. */
+async function getSignedFileUrl(bucket, path, expiresIn = 60) {
+  if (!sb || !path) return null;
+  const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, expiresIn);
+  if (error) { console.warn('[Storage] signed URL:', error); return null; }
+  return data?.signedUrl || null;
+}
+
+/* Called from inline HTML buttons in rendered templates. */
+async function openSignedUrl(bucket, path) {
+  const url = await getSignedFileUrl(bucket, path);
+  if (url) window.open(url, '_blank', 'noopener');
+  else toast('Could not generate download link — try again.');
+}
+
+/* Tracks the file the customer selected in the document step. */
+let selectedDocFile = null;
+
+function onDocFileChange(input) {
+  const file = input.files[0];
+  const nameEl = document.getElementById('jf-doc-file-name');
+  const progressEl = document.getElementById('jf-doc-progress');
+  if (!file) { selectedDocFile = null; nameEl.style.display = 'none'; return; }
+  if (!ALLOWED_MIME.has(file.type)) {
+    progressEl.textContent = 'Only PDF, JPG, or PNG allowed.';
+    progressEl.className = 'upload-progress error';
+    input.value = '';
+    selectedDocFile = null;
+    return;
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    progressEl.textContent = 'File exceeds 10 MB limit.';
+    progressEl.className = 'upload-progress error';
+    input.value = '';
+    selectedDocFile = null;
+    return;
+  }
+  selectedDocFile = file;
+  nameEl.textContent = file.name;
+  nameEl.style.display = 'block';
+  progressEl.textContent = '';
+  progressEl.className = 'upload-progress';
+}
+
+/* Tracks the license file for notary signup. */
+let selectedLicenseFile = null;
+
+function onLicenseFileChange(input) {
+  const file = input.files[0];
+  const nameEl = document.getElementById('nl-license-file-name');
+  if (!file) { selectedLicenseFile = null; nameEl.style.display = 'none'; return; }
+  if (!ALLOWED_MIME.has(file.type) || file.size > MAX_FILE_BYTES) {
+    toast(file.size > MAX_FILE_BYTES ? 'File exceeds 10 MB' : 'Only PDF, JPG, or PNG allowed');
+    input.value = '';
+    selectedLicenseFile = null;
+    return;
+  }
+  selectedLicenseFile = file;
+  nameEl.textContent = file.name;
+  nameEl.style.display = 'block';
+}
+
 function initMonitoring() {
   if (window.SENTRY_DSN && window.Sentry?.init) {
     Sentry.init({ dsn: window.SENTRY_DSN, tracesSampleRate: 0.1 });
@@ -1764,7 +1902,8 @@ const STEPS = [
   { n: 2, label: 'Location' },
   { n: 3, label: 'When' },
   { n: 4, label: 'Price' },
-  { n: 5, label: 'Contact' }
+  { n: 5, label: 'Document' },
+  { n: 6, label: 'Contact' }
 ];
 const TOTAL_STEPS = STEPS.length;
 let currentStep = 1;
@@ -1913,6 +2052,14 @@ function resetPostJobForm() {
   jobLocation.lat = null;
   jobLocation.lng = null;
   if (leafletMarker) { leafletMarker.remove(); leafletMarker = null; }
+  // Clear document upload state
+  selectedDocFile = null;
+  const docInput = document.getElementById('jf-doc-file');
+  if (docInput) docInput.value = '';
+  const docName = document.getElementById('jf-doc-file-name');
+  if (docName) { docName.textContent = ''; docName.style.display = 'none'; }
+  const docProgress = document.getElementById('jf-doc-progress');
+  if (docProgress) { docProgress.textContent = ''; docProgress.className = 'upload-progress'; }
   goToStep(1);
 }
 
@@ -1941,6 +2088,9 @@ function validateStep(step) {
     // Price defaults to suggested but require a positive number.
     ok = flag('jf-price', $price.value && +$price.value > 0) && ok;
   } else if (step === 5) {
+    // Document upload step — optional, always valid
+    ok = true;
+  } else if (step === 6) {
     ok = flag('jf-name', $name.value.trim().length > 0) && ok;
     ok = flag('jf-email', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test($email.value)) && ok;
     // Password required only when Supabase is wired up
@@ -2011,8 +2161,33 @@ $jobForm.addEventListener('submit', async e => {
   STATE.currentUser = { name: job.customerName, email: job.customerEmail };
   saveState();
 
-  // Write to Supabase in the background — UI is not blocked
-  sbSaveJob(job).catch(err => console.warn('[Supabase] job save failed:', err));
+  // Write to Supabase — await when a document needs to be uploaded (requires the real UUID).
+  if (sb && sbUser) {
+    try {
+      await sbSaveJob(job);   // updates job.id to the DB-assigned UUID
+      if (selectedDocFile) {
+        const docProgress = document.getElementById('jf-doc-progress');
+        const ext  = selectedDocFile.name.split('.').pop().toLowerCase();
+        const path = `${sbUser.id}/${job.id}/original.${ext}`;
+        const { path: saved, error: upErr } = await uploadFile(
+          'job-documents', path, selectedDocFile,
+          msg => { if (docProgress) { docProgress.textContent = msg; docProgress.className = 'upload-progress'; } }
+        );
+        if (saved) {
+          job.documentFilePath = saved;
+          saveState();
+          await sb.from('jobs').update({ document_file_path: saved }).eq('id', job.id);
+        } else {
+          console.warn('[Storage] doc upload failed:', upErr);
+        }
+        selectedDocFile = null;
+      }
+    } catch (err) {
+      console.warn('[Supabase] job save failed:', err);
+    }
+  } else {
+    sbSaveJob(job).catch(err => console.warn('[Supabase] job save failed:', err));
+  }
 
   // Simulate a few notaries bidding on this fresh job over the next few seconds.
   seedBidsForUserJob(job);
@@ -2229,6 +2404,9 @@ function renderConfirmedCard(bid, job) {
       <div class="confirmed-actions">
         <button class="btn btn-primary btn-sm" onclick="toast('Calling ${bid.notaryName}…')">Call notary</button>
         <button class="btn btn-secondary btn-sm" onclick="toast('Message sent')">Message</button>
+        ${job.signedDocumentFilePath
+          ? `<button class="btn btn-ghost btn-sm" onclick="openSignedUrl('job-documents','${job.signedDocumentFilePath}')">Download signed doc</button>`
+          : ''}
       </div>
     </div>
   `;
@@ -2356,7 +2534,12 @@ function renderDashboard() {
               : `<strong>${allBids.length}</strong> bid${allBids.length !== 1 ? 's' : ''} · lowest <strong>$${lowest}</strong>`}
             ${alreadyBid ? ' · <span style="color:#1d7a4d;">You bid</span>' : ''}
           </div>
-          <button class="btn btn-primary btn-sm" onclick="openBidModal('${job.id}')">${alreadyBid ? 'Update Bid' : 'Place Bid'}</button>
+          <div style="display:flex;gap:6px;align-items:center;">
+            ${alreadyBid && job.documentFilePath
+              ? `<button class="btn btn-ghost btn-sm" onclick="openSignedUrl('job-documents','${job.documentFilePath}')">View doc</button>`
+              : ''}
+            <button class="btn btn-primary btn-sm" onclick="openBidModal('${job.id}')">${alreadyBid ? 'Update Bid' : 'Place Bid'}</button>
+          </div>
         </div>
       </div>
     `;
@@ -2655,6 +2838,27 @@ async function submitNotaryLogin() {
         setLoading(btn, false);
         return;
       }
+      // Upload license file if selected (best-effort — profile already saved)
+      if (selectedLicenseFile && sbUser) {
+        const progressEl = document.getElementById('nl-upload-progress');
+        const ext  = selectedLicenseFile.name.split('.').pop().toLowerCase();
+        const path = `${sbUser.id}/license-${Date.now()}.${ext}`;
+        if (progressEl) { progressEl.textContent = 'Uploading…'; progressEl.className = 'upload-progress'; }
+        const { path: saved, error: upErr } = await uploadFile('notary-licenses', path, selectedLicenseFile);
+        if (saved) {
+          await sb.from('profiles').update({ license_file_path: saved }).eq('id', sbUser.id);
+          if (progressEl) { progressEl.textContent = ''; progressEl.className = 'upload-progress'; }
+        } else {
+          console.warn('[Storage] license upload failed:', upErr);
+          const warn = document.getElementById('nl-verify-notice');
+          if (warn) {
+            warn.textContent = 'License upload failed — you can add it later in settings.';
+            warn.style.display = 'block';
+            warn.className = 'auth-notice error';
+          }
+        }
+        selectedLicenseFile = null;
+      }
     } catch (err) {
       toast('Sign-in failed: ' + (err.message || 'check your password'));
       setLoading(btn, false);
@@ -2910,10 +3114,12 @@ function rowToJob(row) {
     notes:            row.notes || '',
     startingPrice:    Number(row.starting_price) || 0,
     suggestedPrice:   Number(row.suggested_price) || 0,
-    status:           row.status || 'open',
-    acceptedBidId:    row.accepted_bid_id || null,
-    postedAt:         new Date(row.created_at).getTime(),
-    isUserJob:        row.customer_id === (sbUser?.id || '__nobody__')
+    status:                row.status || 'open',
+    acceptedBidId:         row.accepted_bid_id || null,
+    documentFilePath:      row.document_file_path || null,
+    signedDocumentFilePath: row.signed_document_file_path || null,
+    postedAt:              new Date(row.created_at).getTime(),
+    isUserJob:             row.customer_id === (sbUser?.id || '__nobody__')
   };
 }
 
