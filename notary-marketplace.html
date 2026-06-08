@@ -769,6 +769,24 @@
   .btn-loading { opacity: .6; pointer-events: none; }
 
   /* ============================================================
+     Home-page footer — legal links
+     ============================================================ */
+  .home-footer {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 10px 18px; text-align: center;
+    font-size: 10px; color: #999;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .home-footer a { color: #999; text-decoration: none; transition: color .14s; }
+  .home-footer a:hover { color: #444; }
+  .home-footer .sep { color: #ddd; user-select: none; }
+
+  /* Terms checkbox in forms — links inside label */
+  .terms-cb-label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+  .terms-cb-label a { color: #555; text-decoration: underline; transition: color .14s; }
+  .terms-cb-label a:hover { color: #000; }
+
+  /* ============================================================
      Inline auth notices — email verification + reset confirmations
      ============================================================ */
   .auth-notice {
@@ -888,6 +906,14 @@
           <div class="hiw-desc">Pick your notary by price, rating, or distance.</div>
         </div>
       </div>
+    </div>
+
+    <div class="home-footer">
+      <a data-legal="terms" href="#" target="_blank" rel="noopener">Terms</a>
+      <span class="sep">|</span>
+      <a data-legal="privacy" href="#" target="_blank" rel="noopener">Privacy</a>
+      <span class="sep">|</span>
+      <span>Contact: <a href="mailto:hello@printnparcel.com">hello@printnparcel.com</a></span>
     </div>
   </div>
 
@@ -1086,11 +1112,22 @@
           </div>
           <div class="auth-notice" id="jf-verify-notice" style="display:none;"></div>
 
+          <div class="field" id="jf-terms-field" style="margin-top:10px;">
+            <label class="terms-cb-label">
+              <input type="checkbox" id="jf-terms" style="margin-top:2px;flex-shrink:0;" onchange="updateSubmitState('jf')">
+              <span style="font-size:9.5px;color:#777;line-height:1.5;">
+                I agree to the <a data-legal="terms" href="#" target="_blank" rel="noopener">Terms of Service</a>
+                and <a data-legal="privacy" href="#" target="_blank" rel="noopener">Privacy Policy</a>.
+              </span>
+            </label>
+            <div class="field-error">You must agree to the terms to continue.</div>
+          </div>
+
           <div class="step-foot">
             <span class="step-foot-meta">Step 5 of 5</span>
             <div class="step-foot-actions">
               <button type="button" class="btn btn-secondary" data-step-prev>Back</button>
-              <button type="submit" class="btn btn-primary">Post Job</button>
+              <button type="submit" class="btn btn-primary" id="jf-submit-btn" disabled>Post Job</button>
             </div>
           </div>
         </div>
@@ -1257,13 +1294,17 @@
       </div>
       <div class="auth-notice" id="nl-verify-notice" style="display:none;"></div>
       <div class="field" id="nl-terms-field">
-        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
-          <input type="checkbox" id="nl-terms" style="margin-top:2px;flex-shrink:0;">
-          <span style="font-size:9.5px;color:#777;line-height:1.5;">I agree to the NotaryFinder Terms of Service and confirm I am a licensed notary public.</span>
+        <label class="terms-cb-label">
+          <input type="checkbox" id="nl-terms" style="margin-top:2px;flex-shrink:0;" onchange="updateSubmitState('nl')">
+          <span style="font-size:9.5px;color:#777;line-height:1.5;">
+            I agree to the <a data-legal="terms" href="#" target="_blank" rel="noopener">Terms of Service</a>
+            and <a data-legal="privacy" href="#" target="_blank" rel="noopener">Privacy Policy</a>,
+            and confirm I am a licensed notary public.
+          </span>
         </label>
         <div class="field-error">You must agree to the terms to continue.</div>
       </div>
-      <button class="btn btn-primary" style="width:100%;margin-top:4px;" onclick="submitNotaryLogin()">Sign In / Register</button>
+      <button class="btn btn-primary" id="nl-submit-btn" style="width:100%;margin-top:4px;" onclick="submitNotaryLogin()" disabled>Sign In / Register</button>
     </div>
   </div>
 
@@ -1378,6 +1419,16 @@
 window.SUPABASE_CONFIG = {
   url:     'https://yjjrrenthbflammjqpva.supabase.co',
   anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlqanJyZW50aGJmbGFtbWpxcHZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxOTYzOTEsImV4cCI6MjA5NTc3MjM5MX0.YSQ6NasbhdcSB5jXUJSxDZxTKmSGMpx3CdphqRNnUdw'
+};
+
+/* ================================================================
+   LEGAL URLS — paste your Termly URLs here.
+   Every data-legal="terms" and data-legal="privacy" link in the page
+   will be updated automatically on load.
+   ================================================================ */
+window.LEGAL_URLS = {
+  terms:   '',   // e.g. 'https://app.termly.io/document/terms-of-use/...'
+  privacy: ''    // e.g. 'https://app.termly.io/document/privacy-policy/...'
 };
 
 /* Supabase client — null when unconfigured (offline / demo mode) */
@@ -1813,6 +1864,7 @@ function validateStep(step) {
       const pw = document.getElementById('jf-password');
       ok = flag('jf-password', !!pw && pw.value.length >= 6) && ok;
     }
+    ok = flag('jf-terms', !!document.getElementById('jf-terms')?.checked) && ok;
   }
   return ok;
 }
@@ -2553,6 +2605,29 @@ function signOutNotary() {
 }
 
 /* ================================================================
+   LEGAL LINKS — set href on all data-legal anchors from LEGAL_URLS
+   ================================================================ */
+function setLegalLinks() {
+  const { terms, privacy } = window.LEGAL_URLS;
+  document.querySelectorAll('[data-legal="terms"]').forEach(a => {
+    if (terms) { a.href = terms; } else { a.removeAttribute('href'); a.style.cursor = 'default'; }
+  });
+  document.querySelectorAll('[data-legal="privacy"]').forEach(a => {
+    if (privacy) { a.href = privacy; } else { a.removeAttribute('href'); a.style.cursor = 'default'; }
+  });
+}
+
+/* Toggle the submit button enabled state based on the terms checkbox.
+   prefix = 'jf' (customer post-job) | 'nl' (notary login) */
+function updateSubmitState(prefix) {
+  const cbId  = prefix === 'jf' ? 'jf-terms'     : 'nl-terms';
+  const btnId = prefix === 'jf' ? 'jf-submit-btn' : 'nl-submit-btn';
+  const checked = document.getElementById(cbId)?.checked;
+  const btn     = document.getElementById(btnId);
+  if (btn) btn.disabled = !checked;
+}
+
+/* ================================================================
    LEAFLET MAP — customer location picker (step 2)
    Geocodes via OSM Nominatim — no API key needed.
    ================================================================ */
@@ -2632,7 +2707,8 @@ async function sbAuthCustomer(email, password, name) {
     }
     // Auto-confirm enabled — session granted immediately
     await sb.from('profiles').upsert({
-      id: upData.user.id, role: 'customer', full_name: name, email
+      id: upData.user.id, role: 'customer', full_name: name, email,
+      terms_accepted_at: new Date().toISOString()
     });
     sbUser = upData.user;
     return upData.user;
@@ -2656,7 +2732,8 @@ async function sbAuthNotary(email, password, profile) {
     await sb.from('profiles').upsert({
       id: upData.user.id, role: 'notary',
       full_name: profile.name, email,
-      phone: profile.phone, license_number: profile.license
+      phone: profile.phone, license_number: profile.license,
+      terms_accepted_at: new Date().toISOString()
     });
     sbUser = upData.user;
     return upData.user;
@@ -2955,6 +3032,7 @@ function toast(msg) {
     if (session) sbUser = session.user;
   }
 
+  setLegalLinks();
   seedIfEmpty();
   renderStepper();
   updateSuggested();
