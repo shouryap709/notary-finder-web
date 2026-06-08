@@ -451,6 +451,8 @@
     animation: pulse 1.6s ease-in-out infinite;
   }
   .status-banner.confirmed .status-pulse { background: #4d7fbb; animation: none; }
+  .status-banner.completed { background: #f5f5f5; border-color: #e0e0e0; }
+  .status-banner.completed .status-pulse { background: #aaa; animation: none; }
   @keyframes pulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(45,176,117,.4); }
     50% { box-shadow: 0 0 0 6px rgba(45,176,117,0); }
@@ -587,7 +589,7 @@
   .dash-shell { max-width: 760px; margin: 0 auto; padding: 22px 28px 36px; }
 
   .stats-row {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
     margin-bottom: 20px;
   }
   .stat-card {
@@ -880,6 +882,21 @@
   #jf-map .leaflet-control-attribution {
     font-size: 8px;
   }
+
+  /* ============================================================
+     Review modal — interactive star rating
+     ============================================================ */
+  .review-stars-row {
+    display: flex; justify-content: center; gap: 10px; padding: 14px 0 4px;
+  }
+  .star-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 26px; line-height: 1; padding: 2px 3px;
+    color: #ddd; transition: color .12s, transform .1s;
+    border-radius: 4px;
+  }
+  .star-btn:hover { transform: scale(1.12); }
+  .star-btn.on { color: #d9a017; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1265,6 +1282,11 @@
           <div class="stat-value" id="stat-earnings">—</div>
           <div class="stat-value-sub">From accepted jobs</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-label">Your Rating</div>
+          <div class="stat-value" id="stat-rating">—</div>
+          <div class="stat-value-sub" id="stat-reviews">from reviews</div>
+        </div>
       </div>
 
       <div class="section-label">Available jobs <span class="count" id="dash-job-count"></span></div>
@@ -1434,6 +1456,35 @@
       </div>
       <div class="modal-foot">
         <button class="btn btn-primary" id="bm-submit" style="width:100%;">Submit Bid</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       REVIEW MODAL — opened after customer marks a job complete
+       ============================================================ -->
+  <div class="overlay" id="review-overlay">
+    <div class="modal" style="width:360px;max-width:360px;">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title">Leave a review</div>
+          <div class="modal-sub">How was <span id="rev-notary-name">your notary</span>?</div>
+        </div>
+        <button class="modal-close" id="rev-close">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div class="review-stars-row" id="rev-stars">
+          <!-- Populated by buildReviewStars() -->
+        </div>
+        <div class="field" style="margin-top:12px;margin-bottom:0;">
+          <label class="field-label" for="rev-comment">Anything to add? <span style="color:#ccc;font-weight:400;">(optional)</span></label>
+          <textarea id="rev-comment" class="field-textarea" placeholder="Share your experience…" style="min-height:52px;"></textarea>
+        </div>
+        <div class="auth-notice error" id="rev-error" style="display:none;margin-top:8px;"></div>
+      </div>
+      <div class="modal-foot" style="display:flex;gap:8px;">
+        <button class="btn btn-ghost" id="rev-skip" style="flex:1;text-align:center;">Skip</button>
+        <button class="btn btn-primary" id="rev-submit" style="flex:2;" disabled>Submit Review</button>
       </div>
     </div>
   </div>
@@ -2274,18 +2325,25 @@ function renderMyJob(opts = {}) {
   const bids = bidsForJob(job.id);
   const acceptedBid = job.acceptedBidId ? STATE.bids.find(b => b.id === job.acceptedBidId) : null;
 
-  // Status banner shifts based on whether a bid has been accepted.
-  const statusBanner = acceptedBid
-    ? `<div class="status-banner confirmed">
+  // Status banner shifts based on job state.
+  const isCompleted = job.status === 'completed';
+  const statusBanner = isCompleted
+    ? `<div class="status-banner completed">
          <div class="status-pulse"></div>
-         <div class="status-banner-text">Job confirmed with ${acceptedBid.notaryName}.</div>
+         <div class="status-banner-text">Job completed.</div>
          <div class="status-banner-meta">${formatTimeAgo(job.postedAt)}</div>
        </div>`
-    : `<div class="status-banner">
-         <div class="status-pulse"></div>
-         <div class="status-banner-text">Receiving bids · ${STATE.notaries.length} notaries viewing</div>
-         <div class="status-banner-meta">Posted ${formatTimeAgo(job.postedAt)}</div>
-       </div>`;
+    : acceptedBid
+      ? `<div class="status-banner confirmed">
+           <div class="status-pulse"></div>
+           <div class="status-banner-text">Job confirmed with ${acceptedBid.notaryName}.</div>
+           <div class="status-banner-meta">${formatTimeAgo(job.postedAt)}</div>
+         </div>`
+      : `<div class="status-banner">
+           <div class="status-pulse"></div>
+           <div class="status-banner-text">Receiving bids · ${STATE.notaries.length} notaries viewing</div>
+           <div class="status-banner-meta">Posted ${formatTimeAgo(job.postedAt)}</div>
+         </div>`;
 
   // Job summary card
   const summaryHTML = `
@@ -2402,6 +2460,9 @@ function renderConfirmedCard(bid, job) {
         </div>
       </div>
       <div class="confirmed-actions">
+        ${job.status === 'accepted'
+          ? `<button class="btn btn-ghost btn-sm" onclick="sbCompleteJob('${job.id}')">Mark as completed</button>`
+          : ''}
         <button class="btn btn-primary btn-sm" onclick="toast('Calling ${bid.notaryName}…')">Call notary</button>
         <button class="btn btn-secondary btn-sm" onclick="toast('Message sent')">Message</button>
         ${job.signedDocumentFilePath
@@ -2480,6 +2541,14 @@ function renderDashboard() {
   document.getElementById('stat-active').textContent = activeBids.length;
   document.getElementById('stat-won').textContent = wonBids.length;
   document.getElementById('stat-earnings').textContent = '$' + weekEarnings;
+
+  const demoNotary = STATE.notaries.find(n => n.id === STATE.notaryUser.id);
+  const myRating      = notarySession?._rating       ?? demoNotary?.rating   ?? 5.0;
+  const myReviewCount = notarySession?._reviewsCount ?? demoNotary?.reviews   ?? 0;
+  const ratingEl  = document.getElementById('stat-rating');
+  const reviewsEl = document.getElementById('stat-reviews');
+  if (ratingEl)  ratingEl.textContent  = Number(myRating).toFixed(1);
+  if (reviewsEl) reviewsEl.textContent = myReviewCount + (myReviewCount === 1 ? ' review' : ' reviews');
 
   // Open jobs the current notary hasn't already bid on.
   const myBidJobIds = new Set(myBids.map(b => b.jobId));
@@ -2870,8 +2939,21 @@ async function submitNotaryLogin() {
     name:    nameEl.value.trim(),
     email:   emailEl.value.trim(),
     phone:   phoneEl.value.trim(),
-    license: licenseEl.value.trim()
+    license: licenseEl.value.trim(),
+    _rating: null, _reviewsCount: null
   };
+
+  // Best-effort fetch of notary's current rating for dashboard display
+  if (sb && sbUser) {
+    sb.from('profiles').select('rating, reviews_count').eq('id', sbUser.id).maybeSingle()
+      .then(({ data }) => {
+        if (data && notarySession) {
+          notarySession._rating       = Number(data.rating);
+          notarySession._reviewsCount = data.reviews_count;
+          if (document.getElementById('notary-dashboard').classList.contains('active')) renderDashboard();
+        }
+      }).catch(() => {});
+  }
 
   setLoading(btn, false);
   goTo('notary-dashboard');
@@ -3261,6 +3343,68 @@ async function sbCancelJob(jobId) {
   }
 }
 
+/* Mark job as completed — triggers review modal */
+async function sbCompleteJob(jobId) {
+  const job = STATE.jobs.find(j => j.id === jobId);
+  if (!job || job.status !== 'accepted') return;
+  job.status = 'completed';
+  saveState();
+  renderMyJob();
+  if (sb && sbUser) {
+    try {
+      const { error } = await sb.from('jobs').update({ status: 'completed' }).eq('id', jobId);
+      if (error) throw error;
+    } catch (e) {
+      sentryCapture(e);
+      console.warn('[Supabase] complete job:', e);
+    }
+  }
+  const acceptedBid = STATE.bids.find(b => b.id === job.acceptedBidId);
+  if (acceptedBid) openReviewModal(jobId, acceptedBid.notaryId, acceptedBid.notaryName);
+}
+
+/* INSERT a review — DB trigger handles rating recalculation */
+async function sbSaveReview({ jobId, notaryId, rating, comment }) {
+  if (!sb || !sbUser) return;
+  try {
+    const { error } = await sb.from('reviews').insert({
+      job_id:      jobId,
+      customer_id: sbUser.id,
+      notary_id:   notaryId,
+      rating,
+      comment:     comment || null
+    });
+    if (error) throw error;
+    phCapture('review_submitted', { rating });
+    await refreshNotaryRating(notaryId);
+  } catch (e) {
+    sentryCapture(e);
+    console.warn('[Supabase] save review:', e);
+    throw e;
+  }
+}
+
+/* Re-fetch a notary's rating from DB (after trigger recalculated it) */
+async function refreshNotaryRating(notaryId) {
+  if (!sb) return;
+  const { data } = await sb.from('profiles')
+    .select('rating, reviews_count')
+    .eq('id', notaryId)
+    .maybeSingle();
+  if (!data) return;
+  STATE.bids.forEach(b => {
+    if (b.notaryId === notaryId) {
+      b.notaryRating  = Number(data.rating);
+      b.notaryReviews = data.reviews_count;
+    }
+  });
+  saveState();
+  if (notarySession && sbUser?.id === notaryId) {
+    notarySession._rating       = Number(data.rating);
+    notarySession._reviewsCount = data.reviews_count;
+  }
+}
+
 /* ================================================================
    SUPABASE REALTIME — live bid/job updates
    ================================================================ */
@@ -3522,6 +3666,78 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('on'), 2200);
 }
+
+/* ================================================================
+   REVIEW MODAL
+   ================================================================ */
+let _reviewState = { jobId: null, notaryId: null, notaryName: null, rating: 0 };
+
+function buildReviewStars() {
+  const row = document.getElementById('rev-stars');
+  if (!row) return;
+  row.innerHTML = [1,2,3,4,5].map(v =>
+    `<button class="star-btn" data-val="${v}" type="button">&#9733;</button>`
+  ).join('');
+  row.querySelectorAll('.star-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _reviewState.rating = +btn.dataset.val;
+      row.querySelectorAll('.star-btn').forEach(b =>
+        b.classList.toggle('on', +b.dataset.val <= _reviewState.rating)
+      );
+      document.getElementById('rev-submit').disabled = false;
+    });
+  });
+}
+
+function openReviewModal(jobId, notaryId, notaryName) {
+  if (!sb) return;  // gracefully skip when Supabase not configured
+  _reviewState = { jobId, notaryId, notaryName, rating: 0 };
+  document.getElementById('rev-notary-name').textContent = notaryName || 'your notary';
+  document.getElementById('rev-stars').querySelectorAll('.star-btn')
+    .forEach(b => b.classList.remove('on'));
+  document.getElementById('rev-comment').value = '';
+  document.getElementById('rev-error').style.display = 'none';
+  document.getElementById('rev-submit').disabled = true;
+  document.getElementById('review-overlay').classList.add('open');
+}
+
+function closeReviewModal() {
+  document.getElementById('review-overlay').classList.remove('open');
+}
+
+document.getElementById('rev-close').addEventListener('click', closeReviewModal);
+document.getElementById('rev-skip').addEventListener('click', closeReviewModal);
+document.getElementById('review-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('review-overlay')) closeReviewModal();
+});
+
+document.getElementById('rev-submit').addEventListener('click', async () => {
+  if (!_reviewState.rating) return;
+  const errEl = document.getElementById('rev-error');
+  errEl.style.display = 'none';
+  const btn = document.getElementById('rev-submit');
+  setLoading(btn, true);
+  try {
+    await sbSaveReview({
+      jobId:    _reviewState.jobId,
+      notaryId: _reviewState.notaryId,
+      rating:   _reviewState.rating,
+      comment:  document.getElementById('rev-comment').value.trim()
+    });
+    closeReviewModal();
+    toast('Review submitted — thank you!');
+    renderMyJob();
+  } catch (err) {
+    const msg = (err?.message || '').toLowerCase();
+    errEl.textContent = (msg.includes('unique') || msg.includes('duplicate'))
+      ? 'You\'ve already reviewed this job.'
+      : 'Failed to submit — please try again.';
+    errEl.style.display = 'block';
+  }
+  setLoading(btn, false);
+});
+
+buildReviewStars();
 
 /* ================================================================
    Boot
