@@ -922,6 +922,47 @@
   }
   .star-btn:hover { transform: scale(1.12); }
   .star-btn.on { color: #d9a017; }
+
+  /* ============================================================
+     Notary public profile modal
+     ============================================================ */
+  .pm-avatar {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: #ebebeb; border: 1px solid #ddd;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 600; color: #555; flex-shrink: 0;
+  }
+  .pm-verified {
+    display: inline-block; font-size: 8px; font-weight: 600; letter-spacing: .35px;
+    background: #e6f3ec; color: #1d7a4d; border-radius: 4px;
+    padding: 2px 7px; text-transform: uppercase; margin-top: 3px;
+  }
+  .pm-stat {
+    background: #f7f7f7; border: 1px solid #ebebeb;
+    border-radius: 7px; padding: 10px 12px; text-align: center;
+  }
+  .pm-stat-val { font-size: 16px; font-weight: 600; color: #000; letter-spacing: -.4px; }
+  .pm-stat-lbl { font-size: 8px; color: #aaa; text-transform: uppercase; letter-spacing: .4px; font-weight: 600; margin-top: 2px; }
+
+  /* Shimmer skeleton bars */
+  @keyframes sk-shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position:  200% 0; }
+  }
+  .sk-block {
+    background: linear-gradient(90deg,#f0f0f0 25%,#e6e6e6 50%,#f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: sk-shimmer 1.4s ease-in-out infinite;
+  }
+
+  /* Clickable notary name link in customer UI */
+  .np-link {
+    background: none; border: none; cursor: pointer;
+    color: inherit; font: inherit; padding: 0;
+    text-decoration: underline; text-decoration-color: #ccc;
+    transition: color .13s, text-decoration-color .13s;
+  }
+  .np-link:hover { color: #000; text-decoration-color: #000; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1526,6 +1567,27 @@
       <div class="modal-foot" style="display:flex;gap:8px;">
         <button class="btn btn-ghost" id="rev-skip" style="flex:1;text-align:center;">Skip</button>
         <button class="btn btn-primary" id="rev-submit" style="flex:2;" disabled>Submit Review</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       NOTARY PROFILE MODAL — read-only public profile
+       ============================================================ -->
+  <div class="overlay" id="profile-overlay">
+    <div class="modal" style="width:480px;max-height:580px;">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title" id="pm-name">—</div>
+          <div class="modal-sub" id="pm-sub"></div>
+        </div>
+        <button class="modal-close" id="pm-close">&#x2715;</button>
+      </div>
+      <div class="modal-body" id="pm-body">
+        <!-- Populated by openNotaryProfile() -->
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary btn-sm" onclick="closeNotaryProfile()">Close</button>
       </div>
     </div>
   </div>
@@ -2451,7 +2513,7 @@ function renderLiveBids(bids, job, newBidId = null) {
       <div class="bid-row">
         <div class="bid-avatar">${initialsFor(bid.notaryName)}</div>
         <div class="bid-info">
-          <div class="bid-name">${bid.notaryName}</div>
+          <div class="bid-name"><button class="np-link" onclick="openNotaryProfile('${bid.notaryId}')">${bid.notaryName}</button></div>
           <div class="bid-rating-row">
             ${starsHTML(bid.notaryRating)}
             <span class="rval">${bid.notaryRating}</span>
@@ -2467,7 +2529,7 @@ function renderLiveBids(bids, job, newBidId = null) {
       ${bid.message ? `<div class="bid-message">"${escapeHTML(bid.message)}"</div>` : ''}
       <div class="bid-actions">
         <button class="accept-btn" onclick="acceptBid('${bid.id}')">Accept Bid</button>
-        <button class="profile-link" onclick="toast('Profile view — coming soon')">View Profile</button>
+        <button class="profile-link" onclick="openNotaryProfile('${bid.notaryId}')">View Profile</button>
       </div>
     </div>
   `).join('');
@@ -2495,7 +2557,7 @@ function renderConfirmedCard(bid, job) {
       <div class="confirmed-grid">
         <div class="confirmed-cell">
           <div class="lbl">Notary</div>
-          <div class="val">${bid.notaryName}</div>
+          <div class="val"><button class="np-link" onclick="openNotaryProfile('${bid.notaryId}')">${bid.notaryName}</button></div>
         </div>
         <div class="confirmed-cell">
           <div class="lbl">Phone</div>
@@ -4083,6 +4145,187 @@ function closeReviewModal() {
 }
 
 document.getElementById('rev-close').addEventListener('click', closeReviewModal);
+
+/* ================================================================
+   NOTARY PUBLIC PROFILE MODAL
+   ================================================================ */
+
+const $profileOverlay = document.getElementById('profile-overlay');
+document.getElementById('pm-close').addEventListener('click', closeNotaryProfile);
+$profileOverlay.addEventListener('click', e => { if (e.target === $profileOverlay) closeNotaryProfile(); });
+
+function closeNotaryProfile() {
+  $profileOverlay.classList.remove('open');
+}
+
+function openNotaryProfile(notaryId) {
+  const pmBody = document.getElementById('pm-body');
+  const pmName = document.getElementById('pm-name');
+  const pmSub  = document.getElementById('pm-sub');
+
+  // Pre-populate from STATE while loading
+  const demoNotary = STATE.notaries.find(n => n.id === notaryId);
+  const stateBid   = STATE.bids.find(b => b.notaryId === notaryId);
+  pmName.textContent = demoNotary?.name || stateBid?.notaryName || '—';
+  pmSub.textContent  = '';
+
+  pmBody.innerHTML = renderNotaryProfileSkeleton();
+  $profileOverlay.classList.add('open');
+
+  fetchNotaryProfile(notaryId)
+    .then(data => {
+      const p = data.profile;
+      pmName.textContent = p.full_name || pmName.textContent;
+      pmSub.textContent  = p.business_name || '';
+      pmBody.innerHTML   = renderNotaryProfileContent(data);
+    })
+    .catch(err => {
+      console.warn('[profile] load error:', err);
+      pmBody.innerHTML = '<div style="font-size:9.5px;color:#aaa;padding:8px 0;">Could not load profile.</div>';
+    });
+}
+
+async function fetchNotaryProfile(notaryId) {
+  const demoNotary = STATE.notaries.find(n => n.id === notaryId);
+  const stateBid   = STATE.bids.find(b => b.notaryId === notaryId);
+
+  const fallback = {
+    profile: {
+      id: notaryId,
+      full_name:           demoNotary?.name    || stateBid?.notaryName || 'Notary',
+      business_name:       null,
+      rating:              demoNotary?.rating  ?? stateBid?.notaryRating ?? 5.0,
+      reviews_count:       demoNotary?.reviews ?? stateBid?.notaryReviews ?? 0,
+      verification_status: demoNotary ? 'approved' : null,
+      services:            [],
+      created_at:          null
+    },
+    recentReviews: [],
+    completedJobs: 0
+  };
+
+  if (!sb) return fallback;
+
+  try {
+    const [profileRes, reviewsRes] = await Promise.all([
+      sb.from('profiles')
+        .select('id,full_name,business_name,rating,reviews_count,verification_status,services,created_at')
+        .eq('id', notaryId)
+        .maybeSingle(),
+      sb.from('reviews')
+        .select('rating,comment,created_at,profiles!reviews_customer_id_fkey(full_name)')
+        .eq('notary_id', notaryId)
+        .order('created_at', { ascending: false })
+        .limit(5)
+    ]);
+
+    let completedJobs = 0;
+    try {
+      const acceptedBidIds = STATE.bids
+        .filter(b => b.notaryId === notaryId && b.status === 'accepted')
+        .map(b => b.id);
+      if (acceptedBidIds.length > 0) {
+        const { count } = await sb.from('jobs')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'completed')
+          .in('accepted_bid_id', acceptedBidIds);
+        completedJobs = count || 0;
+      }
+    } catch (_) {}
+
+    const profile = profileRes.data || fallback.profile;
+    const recentReviews = (reviewsRes.data || []).map(r => ({
+      rating:       r.rating,
+      comment:      r.comment,
+      created_at:   r.created_at,
+      customerName: r.profiles?.full_name?.split(' ')[0] || 'Customer'
+    }));
+
+    return { profile, recentReviews, completedJobs };
+  } catch (e) {
+    sentryCapture(e);
+    console.warn('[Supabase] fetchNotaryProfile:', e);
+    return fallback;
+  }
+}
+
+function renderNotaryProfileSkeleton() {
+  return `
+    <div style="padding:4px 0;">
+      <div style="display:flex;gap:14px;margin-bottom:18px;align-items:center;">
+        <div class="sk-block" style="width:52px;height:52px;border-radius:50%;flex-shrink:0;"></div>
+        <div>
+          <div class="sk-block" style="width:140px;height:13px;margin-bottom:7px;border-radius:4px;"></div>
+          <div class="sk-block" style="width:90px;height:10px;border-radius:4px;"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
+        <div class="sk-block" style="height:46px;border-radius:7px;"></div>
+        <div class="sk-block" style="height:46px;border-radius:7px;"></div>
+        <div class="sk-block" style="height:46px;border-radius:7px;"></div>
+      </div>
+      <div class="sk-block" style="width:70px;height:9px;border-radius:4px;margin-bottom:10px;"></div>
+      <div class="sk-block" style="width:100%;height:52px;border-radius:7px;margin-bottom:6px;"></div>
+      <div class="sk-block" style="width:100%;height:52px;border-radius:7px;"></div>
+    </div>
+  `;
+}
+
+function renderNotaryProfileContent({ profile: p, recentReviews, completedJobs }) {
+  const rating      = Number(p.rating) || 0;
+  const reviews     = p.reviews_count  || 0;
+  const verified    = p.verification_status === 'approved';
+  const memberSince = p.created_at
+    ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : '—';
+  const services = Array.isArray(p.services) ? p.services : [];
+
+  return `
+    <div style="display:flex;gap:14px;margin-bottom:18px;align-items:flex-start;">
+      <div class="pm-avatar">${initialsFor(p.full_name || '?')}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:#000;letter-spacing:-.3px;margin-bottom:1px;">${escapeHTML(p.full_name || '—')}</div>
+        ${p.business_name ? `<div style="font-size:9.5px;color:#888;margin-bottom:3px;">${escapeHTML(p.business_name)}</div>` : ''}
+        ${verified ? '<span class="pm-verified">Verified ✓</span>' : ''}
+        <div style="display:flex;align-items:center;gap:5px;margin-top:5px;">
+          ${starsHTML(rating)}
+          <span style="font-size:9.5px;color:#444;font-weight:500;">${rating.toFixed(1)}</span>
+          <span style="font-size:8.5px;color:#bbb;">(${reviews} review${reviews !== 1 ? 's' : ''})</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
+      <div class="pm-stat"><div class="pm-stat-val">${completedJobs}</div><div class="pm-stat-lbl">Jobs done</div></div>
+      <div class="pm-stat"><div class="pm-stat-val" style="font-size:11px;">${memberSince}</div><div class="pm-stat-lbl">Member since</div></div>
+      <div class="pm-stat"><div class="pm-stat-val">—</div><div class="pm-stat-lbl">Avg response</div></div>
+    </div>
+
+    ${services.length > 0 ? `
+      <div class="section-label" style="margin-bottom:8px;">Services</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:16px;">
+        ${services.map(s => `<span class="job-tag" style="font-size:9px;">${escapeHTML(s)}</span>`).join('')}
+      </div>` : ''}
+
+    <div class="section-label" style="margin-bottom:8px;">Recent reviews</div>
+    ${recentReviews.length === 0
+      ? '<div style="font-size:9.5px;color:#bbb;padding:6px 0;">No reviews yet.</div>'
+      : recentReviews.map(r => `
+          <div style="margin-bottom:8px;padding:9px 11px;background:#fafafa;border-radius:7px;border:1px solid #ebebeb;">
+            <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
+              ${starsHTML(r.rating)}
+              <span style="font-size:8.5px;color:#bbb;">${formatTimeAgo(new Date(r.created_at).getTime())}</span>
+            </div>
+            ${r.comment ? `<div style="font-size:9.5px;color:#555;line-height:1.5;font-style:italic;margin-bottom:3px;">"${escapeHTML(r.comment)}"</div>` : ''}
+            <div style="font-size:8.5px;color:#aaa;">— ${escapeHTML(r.customerName || 'Customer')}</div>
+          </div>`).join('')
+    }
+  `;
+}
+
+/* ================================================================
+   REVIEW MODAL — interactive star rating
+   ================================================================ */
 document.getElementById('rev-skip').addEventListener('click', closeReviewModal);
 document.getElementById('review-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('review-overlay')) closeReviewModal();
