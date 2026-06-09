@@ -880,8 +880,32 @@
     overflow: hidden;
   }
   /* Keep Leaflet attribution readable at small size */
-  #jf-map .leaflet-control-attribution {
-    font-size: 8px;
+  #jf-map .leaflet-control-attribution { font-size: 8px; }
+
+  /* Notary home address map — signup + settings */
+  #nl-home-map,
+  #ns-home-map {
+    height: 160px;
+    border-radius: 7px;
+    border: 1px solid #e2e2e2;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  #nl-home-map .leaflet-control-attribution,
+  #ns-home-map .leaflet-control-attribution { font-size: 8px; }
+
+  /* Distance tag — notary dashboard job cards */
+  .job-dist-badge {
+    font-size: 8.5px; color: #555; font-weight: 500;
+    background: #f0f0f0; border-radius: 3px;
+    padding: 1px 6px; white-space: nowrap; display: inline-block;
+  }
+
+  /* Notary settings panel */
+  .notary-settings-panel {
+    background: #fafafa; border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px;
+    margin-bottom: 16px;
   }
 
   /* ============================================================
@@ -1264,8 +1288,13 @@
     </div>
 
     <div class="dash-shell">
-      <div class="page-title" id="dash-welcome">Welcome back</div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;">
+        <div class="page-title" id="dash-welcome">Welcome back</div>
+        <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:3px 8px;" onclick="toggleNotarySettings()">Settings</button>
+      </div>
       <div class="page-subtitle">Here are jobs in your area you can bid on.</div>
+      <div id="notary-settings-panel" style="display:none;"></div>
+      <div id="dash-distance-banner"></div>
 
       <div class="stats-row">
         <div class="stat-card">
@@ -1382,6 +1411,16 @@
           <div class="upload-progress" id="nl-upload-progress"></div>
         </div>
       </div>
+      <div class="field">
+        <label class="field-label" for="nl-home-address">Home / office address <span class="field-label-meta">(optional — used for distance sorting)</span></label>
+        <input type="text" id="nl-home-address" class="field-input" placeholder="123 Main St, San Jose, CA">
+        <div id="nl-home-map"></div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="nl-max-travel">Max travel distance <span class="field-label-meta">(miles)</span></label>
+        <input type="number" id="nl-max-travel" class="field-input" value="25" min="1" max="200" style="max-width:120px;">
+      </div>
+
       <div class="field" id="nl-password-field">
         <label class="field-label" for="nl-password">Password <span style="color:#ccc;font-weight:400;">(min 6 chars)</span></label>
         <input type="password" id="nl-password" class="field-input" placeholder="Create or sign in with a password">
@@ -2574,34 +2613,85 @@ function renderDashboard() {
 
   // Open jobs the current notary hasn't already bid on.
   const myBidJobIds = new Set(myBids.map(b => b.jobId));
-  const openJobs = STATE.jobs
-    .filter(j => j.status === 'open')
-    .sort((a, b) => b.postedAt - a.postedAt);
 
-  document.getElementById('dash-job-count').textContent = openJobs.length + ' open near you';
+  const homeLat = notarySession?.homeLat ?? null;
+  const homeLng = notarySession?.homeLng ?? null;
+  const maxMi   = notarySession?.maxTravelMi ?? 25;
+  const hasHome = homeLat !== null && homeLng !== null;
+
+  // Attach computed distance to each open job object (non-mutating)
+  let openJobs = STATE.jobs
+    .filter(j => j.status === 'open')
+    .map(j => Object.assign({}, j, {
+      _distMi: (hasHome && j.locationLat != null && j.locationLng != null)
+        ? haversineMiles(homeLat, homeLng, j.locationLat, j.locationLng)
+        : null
+    }));
+
+  // Sort: closest first when we have home coords; fall back to newest first
+  if (hasHome) {
+    openJobs.sort((a, b) => {
+      if (a._distMi !== null && b._distMi !== null) return a._distMi - b._distMi;
+      if (a._distMi !== null) return -1;
+      if (b._distMi !== null) return 1;
+      return b.postedAt - a.postedAt;
+    });
+  } else {
+    openJobs.sort((a, b) => b.postedAt - a.postedAt);
+  }
+
+  // Filter by max travel (respect showAllJobs toggle)
+  const filteredJobs = (hasHome && !showAllJobs)
+    ? openJobs.filter(j => j._distMi === null || j._distMi <= maxMi)
+    : openJobs;
+  const hiddenCount = openJobs.length - filteredJobs.length;
+
+  // Distance / filter banner
+  const bannerEl = document.getElementById('dash-distance-banner');
+  if (bannerEl) {
+    if (!hasHome) {
+      bannerEl.innerHTML = `
+        <div style="margin-bottom:14px;padding:8px 12px;background:#f8f8f8;border:1px solid #ebebeb;border-radius:7px;font-size:9.5px;color:#888;display:flex;align-items:center;justify-content:space-between;">
+          <span>Set your home address to sort jobs by distance.</span>
+          <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:2px 8px;" onclick="toggleNotarySettings()">Set address</button>
+        </div>`;
+    } else if (hiddenCount > 0 && !showAllJobs) {
+      bannerEl.innerHTML = `
+        <div style="margin-bottom:14px;padding:8px 12px;background:#f8f8f8;border:1px solid #ebebeb;border-radius:7px;font-size:9.5px;color:#888;display:flex;align-items:center;justify-content:space-between;">
+          <span>${hiddenCount} job${hiddenCount !== 1 ? 's' : ''} beyond ${maxMi} mi hidden.</span>
+          <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:2px 8px;" onclick="showAllJobs=true;renderDashboard()">Show all</button>
+        </div>`;
+    } else {
+      bannerEl.innerHTML = '';
+    }
+  }
+
+  document.getElementById('dash-job-count').textContent = filteredJobs.length + ' open near you';
 
   const list = document.getElementById('dash-jobs-list');
-  if (openJobs.length === 0) {
+  if (filteredJobs.length === 0) {
     list.innerHTML = `
       <div class="empty-state">
         <div class="es-title">No open jobs right now.</div>
         <div class="es-sub">New jobs will appear here as customers post them.</div>
       </div>
     `;
-    return;
-  }
+  } else {
 
-  list.innerHTML = openJobs.map(job => {
+    list.innerHTML = filteredJobs.map(job => {
     const allBids = bidsForJob(job.id);
     const lowest = allBids.length ? allBids[0].price : null;
     const alreadyBid = myBidJobIds.has(job.id);
+    const distLabel = job._distMi !== null
+      ? `<span class="job-dist-badge">${job._distMi.toFixed(1)} mi away</span>`
+      : '';
 
     return `
       <div class="job-card">
         <div class="job-card-row">
           <div class="job-icon-wrap">${serviceIcon(jobPrimaryService(job))}</div>
           <div class="job-card-info">
-            <div class="job-card-title">${jobServiceLabel(job)}</div>
+            <div class="job-card-title" style="display:flex;align-items:center;gap:7px;">${jobServiceLabel(job)}${distLabel}</div>
             <div class="job-card-meta">
               ${job.signatures} sig${job.signatures !== 1 ? 's' : ''}
               <span class="sep">·</span> ${job.location}
@@ -2635,6 +2725,7 @@ function renderDashboard() {
       </div>
     `;
   }).join('');
+  }
 
   const pastEl = document.getElementById('dash-past-bids');
   if (pastEl) {
@@ -2814,6 +2905,7 @@ $bmSubmit.addEventListener('click', async () => {
    MY BIDS — tabs: Active / Won / Lost
    ================================================================ */
 let activeBidsTab = 'active';
+let showAllJobs   = false;
 
 document.getElementById('bid-tabs').addEventListener('click', e => {
   const btn = e.target.closest('.tab-btn');
@@ -2952,12 +3044,19 @@ async function submitNotaryLogin() {
   const btn = document.querySelector('#notary-login .btn-primary');
   setLoading(btn, true);
 
+  const homeAddrEl  = document.getElementById('nl-home-address');
+  const maxTravelEl = document.getElementById('nl-max-travel');
+
   if (sb) {
     try {
       const result = await sbAuthNotary(emailEl.value.trim(), passwordEl.value, {
-        name:    nameEl.value.trim(),
-        phone:   phoneEl.value.trim(),
-        license: licenseEl.value.trim()
+        name:        nameEl.value.trim(),
+        phone:       phoneEl.value.trim(),
+        license:     licenseEl.value.trim(),
+        homeAddress: homeAddrEl?.value.trim() || '',
+        homeLat:     nlHomeLocation.lat,
+        homeLng:     nlHomeLocation.lng,
+        maxTravelMi: Math.max(1, parseInt(maxTravelEl?.value) || 25)
       });
       if (result?.pendingVerification) {
         const notice = document.getElementById('nl-verify-notice');
@@ -2997,20 +3096,30 @@ async function submitNotaryLogin() {
   }
 
   notarySession = {
-    name:    nameEl.value.trim(),
-    email:   emailEl.value.trim(),
-    phone:   phoneEl.value.trim(),
-    license: licenseEl.value.trim(),
+    name:        nameEl.value.trim(),
+    email:       emailEl.value.trim(),
+    phone:       phoneEl.value.trim(),
+    license:     licenseEl.value.trim(),
+    homeAddress: homeAddrEl?.value.trim() || '',
+    homeLat:     nlHomeLocation.lat,
+    homeLng:     nlHomeLocation.lng,
+    maxTravelMi: Math.max(1, parseInt(maxTravelEl?.value) || 25),
     _rating: null, _reviewsCount: null
   };
 
   // Best-effort fetch of notary's current rating for dashboard display
   if (sb && sbUser) {
-    sb.from('profiles').select('rating, reviews_count').eq('id', sbUser.id).maybeSingle()
+    sb.from('profiles')
+      .select('rating, reviews_count, home_address, home_lat, home_lng, max_travel_mi')
+      .eq('id', sbUser.id).maybeSingle()
       .then(({ data }) => {
         if (data && notarySession) {
-          notarySession._rating       = Number(data.rating);
-          notarySession._reviewsCount = data.reviews_count;
+          notarySession._rating         = Number(data.rating);
+          notarySession._reviewsCount   = data.reviews_count;
+          notarySession.homeAddress     = data.home_address   ?? notarySession.homeAddress ?? '';
+          notarySession.homeLat         = data.home_lat       ?? notarySession.homeLat     ?? null;
+          notarySession.homeLng         = data.home_lng       ?? notarySession.homeLng     ?? null;
+          notarySession.maxTravelMi     = data.max_travel_mi  ?? notarySession.maxTravelMi ?? 25;
           if (document.getElementById('notary-dashboard').classList.contains('active')) renderDashboard();
         }
       }).catch(() => {});
@@ -3052,6 +3161,116 @@ function signOutNotary() {
 }
 
 /* ================================================================
+   NOTARY SETTINGS — collapsible home address + max travel panel
+   ================================================================ */
+let notarySettingsPanelOpen = false;
+
+function toggleNotarySettings() {
+  notarySettingsPanelOpen = !notarySettingsPanelOpen;
+  const panel = document.getElementById('notary-settings-panel');
+  if (!panel) return;
+  if (!notarySettingsPanelOpen) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    nsMap = null; nsMarker = null;
+    return;
+  }
+  const addr  = notarySession?.homeAddress || '';
+  const maxMi = notarySession?.maxTravelMi ?? 25;
+  panel.innerHTML = `
+    <div class="notary-settings-panel">
+      <div style="font-size:11px;font-weight:600;color:#000;letter-spacing:-.2px;margin-bottom:12px;">Location settings</div>
+      <div class="field">
+        <label class="field-label" for="ns-home-address">Home / office address</label>
+        <input type="text" id="ns-home-address" class="field-input" placeholder="123 Main St, San Jose, CA" value="${escapeHTML(addr)}">
+        <div id="ns-home-map"></div>
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label class="field-label" for="ns-max-travel">Max travel distance <span class="field-label-meta">(miles)</span></label>
+        <input type="number" id="ns-max-travel" class="field-input" value="${maxMi}" min="1" max="200" style="max-width:120px;">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-primary btn-sm" onclick="saveNotarySettings()">Save</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleNotarySettings()">Cancel</button>
+      </div>
+    </div>
+  `;
+  nsLocation.lat = notarySession?.homeLat ?? null;
+  nsLocation.lng = notarySession?.homeLng ?? null;
+  panel.style.display = 'block';
+  setTimeout(() => {
+    if (window.L) {
+      const center = nsLocation.lat ? [nsLocation.lat, nsLocation.lng] : [37.3382, -121.8863];
+      nsMap = L.map('ns-home-map', { zoomControl: true }).setView(center, nsLocation.lat ? 14 : 11);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      }).addTo(nsMap);
+      if (nsLocation.lat) nsMarker = L.marker([nsLocation.lat, nsLocation.lng]).addTo(nsMap);
+    }
+    const addrEl = document.getElementById('ns-home-address');
+    if (addrEl) {
+      addrEl.addEventListener('input', () => {
+        clearTimeout(nsGeoTimer);
+        nsGeoTimer = setTimeout(() => geocodeNsAddress(addrEl.value), 600);
+      });
+    }
+  }, 80);
+}
+
+async function geocodeNsAddress(query) {
+  if (!query.trim() || !window.L || !nsMap) return;
+  try {
+    const res = await fetch(
+      'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query),
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const data = await res.json();
+    if (!data.length) return;
+    const lat = parseFloat(data[0].lat);
+    const lng = parseFloat(data[0].lon);
+    nsLocation.lat = lat;
+    nsLocation.lng = lng;
+    nsMap.setView([lat, lng], 14);
+    if (nsMarker) nsMarker.remove();
+    nsMarker = L.marker([lat, lng]).addTo(nsMap);
+  } catch (e) {
+    console.warn('[Nominatim] settings geocode error:', e);
+  }
+}
+
+async function saveNotarySettings() {
+  const addrEl  = document.getElementById('ns-home-address');
+  const maxEl   = document.getElementById('ns-max-travel');
+  if (!addrEl || !maxEl) return;
+  const addr  = addrEl.value.trim();
+  const maxMi = Math.max(1, parseInt(maxEl.value) || 25);
+  if (notarySession) {
+    notarySession.homeAddress = addr;
+    notarySession.homeLat     = nsLocation.lat;
+    notarySession.homeLng     = nsLocation.lng;
+    notarySession.maxTravelMi = maxMi;
+  }
+  if (sb && sbUser) {
+    try {
+      const { error } = await sb.from('profiles').update({
+        home_address:  addr || null,
+        home_lat:      nsLocation.lat,
+        home_lng:      nsLocation.lng,
+        max_travel_mi: maxMi
+      }).eq('id', sbUser.id);
+      if (error) throw error;
+    } catch (e) {
+      sentryCapture(e);
+      console.warn('[Supabase] save notary settings:', e);
+    }
+  }
+  showAllJobs = false;
+  toggleNotarySettings();
+  toast('Settings saved');
+  renderDashboard();
+}
+
+/* ================================================================
    LEGAL LINKS — set href on all data-legal anchors from LEGAL_URLS
    ================================================================ */
 function setLegalLinks() {
@@ -3085,6 +3304,25 @@ let geocodeTimer  = null;   // debounce handle
 
 /* Stores the geocoded co-ordinates so they can be saved to the jobs row */
 const jobLocation = { lat: null, lng: null };
+
+/* Notary home address — signup form geocode result */
+const nlHomeLocation = { lat: null, lng: null };
+let nlHomeMap = null, nlHomeMarker = null, nlHomeGeoTimer = null;
+
+/* Settings panel geocode result */
+const nsLocation = { lat: null, lng: null };
+let nsMap = null, nsMarker = null, nsGeoTimer = null;
+
+function haversineMiles(lat1, lng1, lat2, lng2) {
+  const R = 3958.8;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
 
 function initLocationMap() {
   if (!window.L) return;           // Leaflet not loaded (e.g. offline)
@@ -3129,6 +3367,50 @@ $location.addEventListener('input', () => {
   clearTimeout(geocodeTimer);
   geocodeTimer = setTimeout(() => geocodeAddress($location.value), 600);
 });
+
+/* ================================================================
+   LEAFLET MAP — notary home address (signup form)
+   ================================================================ */
+
+function initNlHomeMap() {
+  if (!window.L) return;
+  if (nlHomeMap) { nlHomeMap.invalidateSize(); return; }
+  nlHomeMap = L.map('nl-home-map', { zoomControl: true }).setView([37.3382, -121.8863], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(nlHomeMap);
+}
+
+async function geocodeNlHomeAddress(query) {
+  if (!query.trim() || !window.L) return;
+  if (!nlHomeMap) initNlHomeMap();
+  try {
+    const res = await fetch(
+      'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query),
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const data = await res.json();
+    if (!data.length) return;
+    const lat = parseFloat(data[0].lat);
+    const lng = parseFloat(data[0].lon);
+    nlHomeLocation.lat = lat;
+    nlHomeLocation.lng = lng;
+    nlHomeMap.setView([lat, lng], 14);
+    if (nlHomeMarker) nlHomeMarker.remove();
+    nlHomeMarker = L.marker([lat, lng]).addTo(nlHomeMap);
+  } catch (e) {
+    console.warn('[Nominatim] notary home geocode error:', e);
+  }
+}
+
+const $nlHomeAddress = document.getElementById('nl-home-address');
+if ($nlHomeAddress) {
+  $nlHomeAddress.addEventListener('focus', () => { if (!nlHomeMap) setTimeout(initNlHomeMap, 80); });
+  $nlHomeAddress.addEventListener('input', () => {
+    clearTimeout(nlHomeGeoTimer);
+    nlHomeGeoTimer = setTimeout(() => geocodeNlHomeAddress($nlHomeAddress.value), 600);
+  });
+}
 
 /* ================================================================
    SUPABASE — auth helpers
@@ -3190,6 +3472,10 @@ async function sbAuthNotary(email, password, profile) {
         id: upData.user.id, role: 'notary',
         full_name: profile.name, email,
         phone: profile.phone, license_number: profile.license,
+        home_address:  profile.homeAddress || null,
+        home_lat:      profile.homeLat     || null,
+        home_lng:      profile.homeLng     || null,
+        max_travel_mi: profile.maxTravelMi || 25,
         terms_accepted_at: new Date().toISOString()
       });
       sbUser = upData.user;
