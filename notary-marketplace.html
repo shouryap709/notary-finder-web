@@ -684,6 +684,7 @@
   .status-pending { background: #fff7e0; color: #97720c; }
   .status-accepted { background: #e6f3ec; color: #1d7a4d; }
   .status-lost { background: #f5f5f5; color: #888; }
+  .status-cancelled { background: #f5f5f5; color: #888; }
 
   /* ============================================================
      Realtime connection dot — top-right of screen
@@ -1293,6 +1294,7 @@
       <div class="dash-jobs-list" id="dash-jobs-list">
         <!-- Rendered dynamically -->
       </div>
+      <div id="dash-past-bids"></div>
     </div>
   </div>
 
@@ -2327,23 +2329,30 @@ function renderMyJob(opts = {}) {
 
   // Status banner shifts based on job state.
   const isCompleted = job.status === 'completed';
-  const statusBanner = isCompleted
+  const isCancelled = job.status === 'cancelled';
+  const statusBanner = isCancelled
     ? `<div class="status-banner completed">
          <div class="status-pulse"></div>
-         <div class="status-banner-text">Job completed.</div>
+         <div class="status-banner-text">Job cancelled.</div>
          <div class="status-banner-meta">${formatTimeAgo(job.postedAt)}</div>
        </div>`
-    : acceptedBid
-      ? `<div class="status-banner confirmed">
+    : isCompleted
+      ? `<div class="status-banner completed">
            <div class="status-pulse"></div>
-           <div class="status-banner-text">Job confirmed with ${acceptedBid.notaryName}.</div>
+           <div class="status-banner-text">Job completed.</div>
            <div class="status-banner-meta">${formatTimeAgo(job.postedAt)}</div>
          </div>`
-      : `<div class="status-banner">
-           <div class="status-pulse"></div>
-           <div class="status-banner-text">Receiving bids · ${STATE.notaries.length} notaries viewing</div>
-           <div class="status-banner-meta">Posted ${formatTimeAgo(job.postedAt)}</div>
-         </div>`;
+      : acceptedBid
+        ? `<div class="status-banner confirmed">
+             <div class="status-pulse"></div>
+             <div class="status-banner-text">Job confirmed with ${acceptedBid.notaryName}.</div>
+             <div class="status-banner-meta">${formatTimeAgo(job.postedAt)}</div>
+           </div>`
+        : `<div class="status-banner">
+             <div class="status-pulse"></div>
+             <div class="status-banner-text">Receiving bids · ${STATE.notaries.length} notaries viewing</div>
+             <div class="status-banner-meta">Posted ${formatTimeAgo(job.postedAt)}</div>
+           </div>`;
 
   // Job summary card
   const summaryHTML = `
@@ -2356,7 +2365,7 @@ function renderMyJob(opts = {}) {
           </div>
           ${jobServices(job).length > 1 ? `<div class="job-card-tags" style="margin-top:6px;">${jobServices(job).map(s => `<span class="job-tag">${escapeHTML(s)}</span>`).join('')}</div>` : ''}
         </div>
-        <button class="btn btn-ghost" onclick="if (confirm('Cancel this job?')) cancelUserJob()">Cancel job</button>
+        ${!isCancelled && !isCompleted ? `<button class="btn btn-ghost" onclick="cancelUserJob()">Cancel job</button>` : ''}
       </div>
       <div class="job-summary-grid">
         <div class="job-summary-cell">
@@ -2375,15 +2384,18 @@ function renderMyJob(opts = {}) {
     </div>
   `;
 
-  // Confirmed-state OR live bids
-  const bidsSection = acceptedBid
-    ? renderConfirmedCard(acceptedBid, job)
-    : renderLiveBids(bids, job, opts.newBidId || null);
+  // Confirmed-state OR live bids (nothing if cancelled)
+  const bidsSection = isCancelled
+    ? ''
+    : acceptedBid
+      ? renderConfirmedCard(acceptedBid, job)
+      : renderLiveBids(bids, job, opts.newBidId || null);
 
   root.innerHTML = statusBanner + summaryHTML + bidsSection;
 }
 
 function renderLiveBids(bids, job, newBidId = null) {
+  bids = bids.filter(b => b.status === 'pending');
   if (bids.length === 0) {
     return `
       <div class="section-label">Live bids <span class="count">waiting…</span></div>
@@ -2468,6 +2480,9 @@ function renderConfirmedCard(bid, job) {
         ${job.signedDocumentFilePath
           ? `<button class="btn btn-ghost btn-sm" onclick="openSignedUrl('job-documents','${job.signedDocumentFilePath}')">Download signed doc</button>`
           : ''}
+        ${job.status === 'accepted'
+          ? `<button class="btn btn-ghost btn-sm" style="color:var(--accent-red)" onclick="cancelUserJob()">Cancel job</button>`
+          : ''}
       </div>
     </div>
   `;
@@ -2510,14 +2525,21 @@ function acceptBid(bidId) {
 
 function cancelUserJob() {
   const job = findUserJob();
-  if (!job) return;
-  const jobId = job.id;
-  STATE.jobs = STATE.jobs.filter(j => j.id !== job.id);
-  STATE.bids = STATE.bids.filter(b => b.jobId !== job.id);
+  if (!job || job.status === 'completed' || job.status === 'cancelled') return;
+
+  const msg = job.status === 'accepted'
+    ? 'This will cancel your job. The notary will be notified. Continue?'
+    : 'Cancel this job?';
+  if (!confirm(msg)) return;
+
+  job.status = 'cancelled';
+  if (job.acceptedBidId) {
+    const ab = STATE.bids.find(b => b.id === job.acceptedBidId);
+    if (ab) ab.status = 'cancelled';
+  }
   saveState();
 
-  // Mirror to Supabase (non-blocking)
-  sbCancelJob(jobId).catch(err => console.warn('[Supabase] cancel job:', err));
+  sbCancelJob(job.id).catch(err => console.warn('[Supabase] cancel job:', err));
 
   toast('Job cancelled');
   renderMyJob();
@@ -2613,6 +2635,38 @@ function renderDashboard() {
       </div>
     `;
   }).join('');
+
+  const pastEl = document.getElementById('dash-past-bids');
+  if (pastEl) {
+    const pastBids = myBids
+      .filter(b => b.status === 'lost' || b.status === 'cancelled')
+      .sort((a, b) => b.placedAt - a.placedAt)
+      .slice(0, 5);
+    if (pastBids.length === 0) {
+      pastEl.innerHTML = '';
+    } else {
+      pastEl.innerHTML = `
+        <div class="section-label" style="margin-top:20px;">Past bids</div>
+        ${pastBids.map(b => {
+          const pj = STATE.jobs.find(j => j.id === b.jobId);
+          const sc = b.status === 'cancelled' ? 'status-cancelled' : 'status-lost';
+          const sl = b.status === 'cancelled' ? 'Withdrawn' : 'Lost';
+          return `<div class="mybid-card" style="opacity:.5;margin-bottom:8px;">
+            <div class="mybid-row">
+              <div class="mybid-info">
+                <div class="mybid-title">${pj ? jobServiceLabel(pj) : 'Job removed'}</div>
+                <div class="mybid-meta">${pj ? pj.location + ' · ' : ''}placed ${formatTimeAgo(b.placedAt)}</div>
+              </div>
+              <div class="mybid-right">
+                <div class="mybid-price" style="font-size:12px;">$${b.price}</div>
+                <div class="mybid-status ${sc}">${sl}</div>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      `;
+    }
+  }
 }
 
 function serviceIcon(type) {
@@ -2778,7 +2832,7 @@ function renderMyBids() {
   // Lost = bid lost (job accepted to someone else).
   const active = mine.filter(b => b.status === 'pending');
   const won = mine.filter(b => b.status === 'accepted');
-  const lost = mine.filter(b => b.status === 'lost');
+  const lost = mine.filter(b => b.status === 'lost' || b.status === 'cancelled');
 
   document.getElementById('tab-cnt-active').textContent = active.length;
   document.getElementById('tab-cnt-won').textContent = won.length;
@@ -2793,7 +2847,7 @@ function renderMyBidsList() {
   let filtered;
   if (activeBidsTab === 'active') filtered = mine.filter(b => b.status === 'pending');
   else if (activeBidsTab === 'won') filtered = mine.filter(b => b.status === 'accepted');
-  else filtered = mine.filter(b => b.status === 'lost');
+  else filtered = mine.filter(b => b.status === 'lost' || b.status === 'cancelled');
 
   filtered.sort((a, b) => b.placedAt - a.placedAt);
 
@@ -2811,13 +2865,15 @@ function renderMyBidsList() {
   root.innerHTML = filtered.map(b => {
     const job = STATE.jobs.find(j => j.id === b.jobId);
     const statusClass =
-      b.status === 'accepted' ? 'status-accepted' :
-      b.status === 'pending'  ? 'status-pending'  :
-                                'status-lost';
+      b.status === 'accepted'  ? 'status-accepted'  :
+      b.status === 'pending'   ? 'status-pending'   :
+      b.status === 'cancelled' ? 'status-cancelled' :
+                                 'status-lost';
     const statusLabel =
-      b.status === 'accepted' ? 'Accepted' :
-      b.status === 'pending'  ? 'Pending'  :
-                                'Lost';
+      b.status === 'accepted'  ? 'Accepted'  :
+      b.status === 'pending'   ? 'Pending'   :
+      b.status === 'cancelled' ? 'Withdrawn' :
+                                 'Lost';
 
     return `
       <div class="mybid-card">
@@ -2835,6 +2891,11 @@ function renderMyBidsList() {
             <div class="mybid-status ${statusClass}">${statusLabel}</div>
           </div>
         </div>
+        ${b.status === 'pending' && job && job.status === 'open'
+          ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);">
+               <button class="btn btn-ghost btn-sm" onclick="cancelBid('${b.id}')">Withdraw bid</button>
+             </div>`
+          : ''}
       </div>
     `;
   }).join('');
@@ -3331,16 +3392,46 @@ async function sbAcceptBid(jobId, bidId) {
   }
 }
 
-/* DELETE a job (cascades to its bids via DB constraint) */
 async function sbCancelJob(jobId) {
   if (!sb || !sbUser) return;
   try {
-    const { error } = await sb.from('jobs').delete().eq('id', jobId);
-    if (error) throw error;
+    const job = STATE.jobs.find(j => j.id === jobId);
+    const ops = [sb.from('jobs').update({ status: 'cancelled' }).eq('id', jobId)];
+    if (job?.acceptedBidId) {
+      ops.push(sb.from('bids').update({ status: 'cancelled' }).eq('id', job.acceptedBidId));
+    }
+    const results = await Promise.all(ops);
+    for (const r of results) if (r.error) throw r.error;
+    phCapture('job_cancelled');
   } catch (e) {
     sentryCapture(e);
     console.warn('[Supabase] cancel job:', e);
   }
+}
+
+async function sbCancelBid(bidId) {
+  if (!sb || !sbUser) return;
+  try {
+    const { error } = await sb.from('bids').update({ status: 'cancelled' }).eq('id', bidId);
+    if (error) throw error;
+    phCapture('bid_cancelled');
+  } catch (e) {
+    sentryCapture(e);
+    console.warn('[Supabase] cancel bid:', e);
+  }
+}
+
+function cancelBid(bidId) {
+  const bid = STATE.bids.find(b => b.id === bidId);
+  if (!bid || bid.status !== 'pending') return;
+  const job = STATE.jobs.find(j => j.id === bid.jobId);
+  if (!job || job.status !== 'open') return;
+  if (!confirm('Withdraw this bid?')) return;
+  bid.status = 'cancelled';
+  saveState();
+  sbCancelBid(bid.id).catch(err => console.warn('[Supabase] cancel bid:', err));
+  toast('Bid withdrawn');
+  renderMyBids();
 }
 
 /* Mark job as completed — triggers review modal */
