@@ -963,6 +963,70 @@
     transition: color .13s, text-decoration-color .13s;
   }
   .np-link:hover { color: #000; text-decoration-color: #000; }
+
+  /* ============================================================
+     Notification bell + panel
+     ============================================================ */
+  .notif-bell {
+    position: relative; background: none; border: none; cursor: pointer;
+    width: 28px; height: 28px; display: none;
+    align-items: center; justify-content: center;
+    font-size: 13px; color: #555; flex-shrink: 0;
+    border-radius: 4px; transition: background .15s;
+  }
+  .notif-bell:hover { background: #f4f4f4; color: #000; }
+  .notif-bell.visible { display: inline-flex; }
+  .notif-badge {
+    position: absolute; top: 1px; right: 1px;
+    min-width: 13px; height: 13px;
+    background: #d04545; color: #fff;
+    border-radius: 9px; font-size: 7.5px; font-weight: 700;
+    line-height: 13px; text-align: center; padding: 0 3px;
+    display: none; pointer-events: none;
+  }
+  .notif-badge.visible { display: block; }
+  #notif-panel {
+    position: absolute; top: 40px; right: 8px;
+    width: 272px; background: #fff; border: 1px solid #e8e8e8;
+    border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    z-index: 9999; overflow: hidden; display: none;
+  }
+  #notif-panel.open { display: block; }
+  .np-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 11px 7px; border-bottom: 1px solid #f0f0f0;
+  }
+  .np-head-title { font-size: 10px; font-weight: 700; color: #111; letter-spacing: -.2px; }
+  .np-acts { display: flex; gap: 4px; }
+  .np-acts button {
+    background: none; border: none; cursor: pointer;
+    font-size: 8px; font-family: 'DM Sans',sans-serif;
+    color: #999; padding: 2px 5px; border-radius: 4px;
+    transition: background .13s, color .13s;
+  }
+  .np-acts button:hover { background: #f5f5f5; color: #333; }
+  .np-list { max-height: 260px; overflow-y: auto; overscroll-behavior: contain; }
+  .np-item {
+    display: flex; gap: 8px; padding: 8px 11px;
+    border-bottom: 1px solid #f7f7f7; cursor: pointer; transition: background .12s;
+  }
+  .np-item:last-child { border-bottom: none; }
+  .np-item:hover { background: #fafafa; }
+  .np-item.unread { background: #f0f6ff; }
+  .np-item.unread:hover { background: #e8f0ff; }
+  .np-ico { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .np-cnt { flex: 1; min-width: 0; }
+  .np-ttl {
+    font-size: 9px; font-weight: 600; color: #111; margin-bottom: 1px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .np-bdy {
+    font-size: 8.5px; color: #666; line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .np-ts { font-size: 7.5px; color: #bbb; margin-top: 2px; }
+  .np-empty { padding: 22px 12px; text-align: center; font-size: 9px; color: #bbb; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -999,6 +1063,7 @@
         <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
       </nav>
+      <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle" id="mode-toggle">
         <button data-mode="customer" class="on">Customer</button>
         <button data-mode="notary">Notary</button>
@@ -1053,6 +1118,7 @@
         <button class="nav-btn active" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
       </nav>
+      <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer" class="on">Customer</button>
         <button data-mode="notary">Notary</button>
@@ -1299,6 +1365,7 @@
         <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn active" onclick="goTo('my-job')">My Jobs</button>
       </nav>
+      <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer" class="on">Customer</button>
         <button data-mode="notary">Notary</button>
@@ -1322,6 +1389,7 @@
         <button class="nav-btn" onclick="goTo('my-bids')">My Bids</button>
       </nav>
       <button class="notary-pill" id="notary-pill-dashboard" onclick="signOutNotary()"></button>
+      <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer">Customer</button>
         <button data-mode="notary" class="on">Notary</button>
@@ -1380,6 +1448,7 @@
         <button class="nav-btn active" onclick="goTo('my-bids')">My Bids</button>
       </nav>
       <button class="notary-pill" id="notary-pill-bids" onclick="signOutNotary()"></button>
+      <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer">Customer</button>
         <button data-mode="notary" class="on">Notary</button>
@@ -1412,6 +1481,7 @@
       <nav class="nav" data-mode-nav="notary">
         <button class="nav-btn active">Sign In</button>
       </nav>
+      <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer">Customer</button>
         <button data-mode="notary" class="on">Notary</button>
@@ -1639,6 +1709,21 @@
     </div>
   </div>
 
+  <!-- Notification panel — shared across all pages -->
+  <div id="notif-panel">
+    <div class="np-head">
+      <div class="np-head-title">Notifications</div>
+      <div class="np-acts">
+        <button onclick="sbMarkAllRead()">Mark all read</button>
+        <button onclick="sbClearReadNotifications()">Clear read</button>
+        <button onclick="closeNotifPanel()">&#x2715;</button>
+      </div>
+    </div>
+    <div class="np-list" id="np-list">
+      <div class="np-empty">No notifications yet.</div>
+    </div>
+  </div>
+
 </div>
 </div>
 <div class="laptop-base"><div class="trackpad"></div></div>
@@ -1681,6 +1766,9 @@ const sb = (window.SUPABASE_CONFIG.url && window.SUPABASE_CONFIG.anonKey)
 
 /* Active Supabase auth user — populated on boot and after sign-in */
 let sbUser = null;
+
+/* In-memory notification list — synced from DB and realtime */
+let notifList = [];
 
 /* ================================================================
    MONITORING — Sentry + PostHog init + thin wrappers
@@ -3609,6 +3697,7 @@ function rowToJob(row) {
     acceptedBidId:         row.accepted_bid_id || null,
     documentFilePath:      row.document_file_path || null,
     signedDocumentFilePath: row.signed_document_file_path || null,
+    customerId:            row.customer_id || null,
     postedAt:              new Date(row.created_at).getTime(),
     isUserJob:             row.customer_id === (sbUser?.id || '__nobody__')
   };
@@ -3713,6 +3802,16 @@ async function sbSaveBid(bid) {
       if (data) {
         bid.id = data.id;
         phCapture('bid_placed', { job_id: bid.jobId, price: bid.price });
+        const _bJob = STATE.jobs.find(j => j.id === bid.jobId);
+        if (_bJob?.customerId) {
+          sbCreateNotification({
+            userId: _bJob.customerId,
+            type: 'bid_placed',
+            title: 'New bid on your job',
+            body: `${notarySession?.name || 'A notary'} bid $${bid.price}`,
+            link_target: `job:${bid.jobId}`
+          });
+        }
       }
     }
   } catch (e) {
@@ -3734,6 +3833,26 @@ async function sbAcceptBid(jobId, bidId) {
     if (jobRes.error) throw jobRes.error;
     if (bidRes.error) throw bidRes.error;
     phCapture('bid_accepted');
+    const _winBid = STATE.bids.find(b => b.id === bidId);
+    if (_winBid?.notaryId) {
+      sbCreateNotification({
+        userId: _winBid.notaryId,
+        type: 'bid_accepted',
+        title: 'Your bid was accepted!',
+        body: 'A customer accepted your bid. Check your dashboard.',
+        link_target: 'notary-dashboard'
+      });
+    }
+    const _loseBids = STATE.bids.filter(b => b.jobId === jobId && b.id !== bidId && b.notaryId);
+    for (const _lb of _loseBids) {
+      sbCreateNotification({
+        userId: _lb.notaryId,
+        type: 'bid_lost',
+        title: 'Your bid was not selected',
+        body: 'The customer accepted another notary\'s bid.',
+        link_target: 'my-bids'
+      });
+    }
   } catch (e) {
     sentryCapture(e);
     console.warn('[Supabase] accept bid:', e);
@@ -3751,6 +3870,18 @@ async function sbCancelJob(jobId) {
     const results = await Promise.all(ops);
     for (const r of results) if (r.error) throw r.error;
     phCapture('job_cancelled');
+    const _cjJob = STATE.jobs.find(j => j.id === jobId);
+    const _cjBid = _cjJob?.acceptedBidId
+      ? STATE.bids.find(b => b.id === _cjJob.acceptedBidId) : null;
+    if (_cjBid?.notaryId) {
+      sbCreateNotification({
+        userId: _cjBid.notaryId,
+        type: 'job_cancelled',
+        title: 'A job was cancelled',
+        body: 'The customer cancelled the job you were hired for.',
+        link_target: 'my-bids'
+      });
+    }
   } catch (e) {
     sentryCapture(e);
     console.warn('[Supabase] cancel job:', e);
@@ -3763,6 +3894,17 @@ async function sbCancelBid(bidId) {
     const { error } = await sb.from('bids').update({ status: 'cancelled' }).eq('id', bidId);
     if (error) throw error;
     phCapture('bid_cancelled');
+    const _cb = STATE.bids.find(b => b.id === bidId);
+    const _cbJob = _cb ? STATE.jobs.find(j => j.id === _cb.jobId) : null;
+    if (_cbJob?.customerId) {
+      sbCreateNotification({
+        userId: _cbJob.customerId,
+        type: 'bid_withdrawn',
+        title: 'A notary withdrew their bid',
+        body: 'A notary has withdrawn their bid on your job.',
+        link_target: `job:${_cbJob.id}`
+      });
+    }
   } catch (e) {
     sentryCapture(e);
     console.warn('[Supabase] cancel bid:', e);
@@ -3799,7 +3941,16 @@ async function sbCompleteJob(jobId) {
     }
   }
   const acceptedBid = STATE.bids.find(b => b.id === job.acceptedBidId);
-  if (acceptedBid) openReviewModal(jobId, acceptedBid.notaryId, acceptedBid.notaryName);
+  if (acceptedBid) {
+    sbCreateNotification({
+      userId: acceptedBid.notaryId,
+      type: 'job_completed',
+      title: 'Job marked as completed',
+      body: 'The customer has marked your job as complete.',
+      link_target: 'my-bids'
+    });
+    openReviewModal(jobId, acceptedBid.notaryId, acceptedBid.notaryName);
+  }
 }
 
 /* INSERT a review — DB trigger handles rating recalculation */
@@ -3841,6 +3992,147 @@ async function refreshNotaryRating(notaryId) {
   if (notarySession && sbUser?.id === notaryId) {
     notarySession._rating       = Number(data.rating);
     notarySession._reviewsCount = data.reviews_count;
+  }
+}
+
+/* ================================================================
+   NOTIFICATIONS — in-app inbox
+   ================================================================ */
+
+const _NOTIF_ICONS = {
+  bid_placed:    '💰',
+  bid_accepted:  '🎉',
+  bid_lost:      '😔',
+  job_cancelled: '🚫',
+  bid_withdrawn: '↩️',
+  job_completed: '✅'
+};
+
+function renderNotifBadges() {
+  const unread = notifList.filter(n => !n.is_read).length;
+  document.querySelectorAll('.notif-badge').forEach(el => {
+    el.textContent = unread > 9 ? '9+' : (unread || '');
+    el.classList.toggle('visible', unread > 0);
+  });
+}
+
+function renderNotifPanel() {
+  const list = document.getElementById('np-list');
+  if (!list) return;
+  if (notifList.length === 0) {
+    list.innerHTML = '<div class="np-empty">No notifications yet.</div>';
+    return;
+  }
+  list.innerHTML = notifList
+    .slice()
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .map(n => `
+      <div class="np-item ${n.is_read ? '' : 'unread'}" onclick="onNotifClick('${n.id}','${escapeHTML(n.link_target || '')}')">
+        <div class="np-ico">${_NOTIF_ICONS[n.type] || '🔔'}</div>
+        <div class="np-cnt">
+          <div class="np-ttl">${escapeHTML(n.title)}</div>
+          ${n.body ? `<div class="np-bdy">${escapeHTML(n.body)}</div>` : ''}
+          <div class="np-ts">${formatTimeAgo(new Date(n.created_at).getTime())}</div>
+        </div>
+      </div>`).join('');
+}
+
+function toggleNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  if (!panel) return;
+  if (panel.classList.contains('open')) { closeNotifPanel(); }
+  else { panel.classList.add('open'); renderNotifPanel(); }
+}
+
+function closeNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  if (panel) panel.classList.remove('open');
+}
+
+function onNotifClick(id, linkTarget) {
+  const n = notifList.find(n => n.id === id);
+  if (n && !n.is_read) {
+    n.is_read = true;
+    renderNotifBadges();
+    sbMarkNotificationRead(id).catch(() => {});
+  }
+  closeNotifPanel();
+  if (linkTarget) {
+    if (linkTarget.startsWith('job:')) goTo('my-job');
+    else goTo(linkTarget);
+  }
+}
+
+async function sbCreateNotification({ userId, type, title, body = null, link_target = null }) {
+  if (!sb || !sbUser) return;
+  if (userId === sbUser.id) return;
+  try {
+    const { error } = await sb.from('notifications').insert({
+      user_id: userId, type, title, body, link_target
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.warn('[Supabase] create notification:', e);
+  }
+}
+
+async function sbLoadNotifications() {
+  if (!sb || !sbUser) return;
+  try {
+    const { data, error } = await sb.from('notifications')
+      .select('*')
+      .eq('user_id', sbUser.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    notifList = (data || []).map(r => ({
+      id:          r.id,
+      type:        r.type,
+      title:       r.title,
+      body:        r.body,
+      link_target: r.link_target,
+      is_read:     r.is_read,
+      created_at:  r.created_at
+    }));
+    renderNotifBadges();
+  } catch (e) {
+    console.warn('[Supabase] load notifications:', e);
+  }
+}
+
+async function sbMarkNotificationRead(id) {
+  if (!sb || !sbUser) return;
+  try {
+    await sb.from('notifications').update({ is_read: true })
+      .eq('id', id).eq('user_id', sbUser.id);
+  } catch (e) {
+    console.warn('[Supabase] mark notification read:', e);
+  }
+}
+
+async function sbMarkAllRead() {
+  notifList.forEach(n => { n.is_read = true; });
+  renderNotifBadges();
+  renderNotifPanel();
+  if (!sb || !sbUser) return;
+  try {
+    await sb.from('notifications').update({ is_read: true })
+      .eq('user_id', sbUser.id).eq('is_read', false);
+  } catch (e) {
+    console.warn('[Supabase] mark all read:', e);
+  }
+}
+
+async function sbClearReadNotifications() {
+  notifList = notifList.filter(n => !n.is_read);
+  renderNotifPanel();
+  renderNotifBadges();
+  if (!sb || !sbUser) return;
+  try {
+    await sb.from('notifications').delete()
+      .eq('user_id', sbUser.id).eq('is_read', true);
+  } catch (e) {
+    console.warn('[Supabase] clear read notifications:', e);
   }
 }
 
@@ -4002,7 +4294,35 @@ const sbRealtime = (() => {
     _dot(false);
   }
 
-  return { subscribeToJob, subscribeToOpenJobs, unsubscribe, unsubscribeAll };
+  function subscribeToNotifications(userId) {
+    if (!sb) return () => {};
+    const name = 'notif:' + userId;
+    if (_ch.has(name)) return () => unsubscribe(name);
+
+    const channel = sb.channel(name)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'notifications',
+        filter: `user_id=eq.${userId}`
+      }, ({ new: row }) => {
+        notifList.unshift({
+          id:          row.id,
+          type:        row.type,
+          title:       row.title,
+          body:        row.body,
+          link_target: row.link_target,
+          is_read:     row.is_read,
+          created_at:  row.created_at
+        });
+        renderNotifBadges();
+        toast(`🔔 ${row.title}`);
+      })
+      .subscribe(status => _onStatus(name, status, () => subscribeToNotifications(userId)));
+
+    _ch.set(name, { channel, retryTimer: null });
+    return () => unsubscribe(name);
+  }
+
+  return { subscribeToJob, subscribeToOpenJobs, subscribeToNotifications, unsubscribe, unsubscribeAll };
 })();
 
 /* ================================================================
@@ -4359,11 +4679,26 @@ document.getElementById('rev-submit').addEventListener('click', async () => {
 
 buildReviewStars();
 
+// Close notification panel when clicking outside it
+document.addEventListener('click', e => {
+  const panel = document.getElementById('notif-panel');
+  if (panel && panel.classList.contains('open')) {
+    if (!panel.contains(e.target) && !e.target.closest('.notif-bell')) {
+      closeNotifPanel();
+    }
+  }
+});
+
 /* ================================================================
    Boot
    ================================================================ */
 (async () => {
   initMonitoring();
+
+  // Show bells whenever Supabase is configured (not just when signed in)
+  if (sb) {
+    document.querySelectorAll('.notif-bell').forEach(el => el.classList.add('visible'));
+  }
 
   // Listen for auth events before getSession() so PASSWORD_RECOVERY fires
   if (sb) {
@@ -4379,7 +4714,11 @@ buildReviewStars();
   // Restore Supabase session before rendering anything
   if (sb) {
     const session = await sbGetSession();
-    if (session) sbUser = session.user;
+    if (session) {
+      sbUser = session.user;
+      sbLoadNotifications();
+      sbRealtime.subscribeToNotifications(session.user.id);
+    }
   }
 
   setLegalLinks();
