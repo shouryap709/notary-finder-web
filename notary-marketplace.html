@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>NotaryFinder — Marketplace</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap');
@@ -1027,6 +1028,172 @@
   }
   .np-ts { font-size: 7.5px; color: #bbb; margin-top: 2px; }
   .np-empty { padding: 22px 12px; text-align: center; font-size: 9px; color: #bbb; }
+
+  /* ============================================================
+     MOBILE — ≤768px
+     Hide laptop chrome; screen fills viewport.
+     ============================================================ */
+  @media (max-width: 768px) {
+
+    body { background: #f0f0f0; padding: 0; display: block; min-height: 100vh; }
+    .scene { display: block; }
+    .laptop-lid,
+    .laptop-base { display: none; }
+
+    .screen {
+      position: fixed !important;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100% !important;
+      height: 100% !important;
+      border-radius: 0 !important;
+    }
+
+    /* Hide inline nav; hamburger triggers drawer instead */
+    .nav { display: none !important; }
+    .mode-toggle button { padding: 3px 8px; font-size: 8px; }
+
+    /* iOS touch targets ≥44px */
+    .btn { min-height: 44px; }
+    .field-input,
+    .field-select { font-size: 16px !important; min-height: 44px; }
+    .field-textarea { font-size: 16px !important; }
+    .svc-pill,
+    .radio-pill { min-height: 44px; font-size: 11px; padding: 10px 8px; }
+    .btn-primary:active,
+    .btn-secondary:active { opacity: .75; }
+
+    /* ---- Home ---- */
+    .hero-wrap { padding: 24px 20px; }
+    .hero-wrap h1 { font-size: 24px; letter-spacing: -.8px; }
+    .hero-ctas { gap: 12px; }
+    .btn-block { max-width: 100%; font-size: 13px; }
+    .how-it-works { grid-template-columns: 1fr; gap: 8px; }
+    .home-footer { position: relative; margin-top: 24px; padding: 16px 18px 28px; }
+
+    /* ---- Post Job form ---- */
+    .form-shell { padding: 16px 16px 32px; max-width: 100%; }
+    .field-row { grid-template-columns: 1fr; }
+    .service-grid { grid-template-columns: repeat(2, 1fr); }
+    #jf-map { height: 180px; }
+
+    .step-foot {
+      position: sticky;
+      bottom: 0;
+      background: #fff;
+      border-top: 1px solid var(--line-soft);
+      padding: 12px 0 max(16px, env(safe-area-inset-bottom));
+      margin-top: 16px;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 50;
+    }
+    .step-foot-actions {
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 8px;
+      width: 100%;
+    }
+    .step-foot-actions .btn {
+      width: 100%;
+      min-height: 44px;
+      justify-content: center;
+    }
+    .step-foot .step-foot-meta { font-size: 10px; }
+
+    /* ---- My Job ---- */
+    .my-job-shell { padding: 16px 16px 32px; max-width: 100%; }
+    .job-summary-grid { grid-template-columns: 1fr 1fr; }
+    .bid-actions { flex-direction: column; align-items: stretch; }
+    .bid-actions .accept-btn {
+      width: 100%;
+      min-height: 44px;
+      text-align: center;
+      font-size: 11px;
+      padding: 11px 14px;
+    }
+    .confirmed-actions { flex-direction: column; gap: 8px; }
+    .confirmed-actions .btn { width: 100%; min-height: 44px; justify-content: center; }
+    .confirmed-grid { grid-template-columns: 1fr 1fr; }
+
+    /* ---- Notary Dashboard ---- */
+    .dash-shell { padding: 16px 16px 32px; max-width: 100%; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .job-card-foot { flex-wrap: wrap; gap: 8px; }
+    .job-card-foot .btn { flex: 1 1 100%; min-height: 44px; justify-content: center; }
+
+    /* ---- Modals → bottom sheet ---- */
+    .overlay { align-items: flex-end; }
+    .modal {
+      width: 100% !important;
+      max-width: 100% !important;
+      border-radius: 16px 16px 0 0 !important;
+      max-height: 90vh;
+      transform: translateY(30px) !important;
+    }
+    .overlay.open .modal { transform: translateY(0) !important; }
+
+    /* ---- Notification panel ---- */
+    #notif-panel { width: calc(100% - 16px); right: 8px; left: 8px; top: 42px; }
+
+    /* ---- Nav drawer ---- */
+    .nav-drawer {
+      position: absolute;
+      top: 38px; left: 0; bottom: 0;
+      width: 220px;
+      background: #fff;
+      border-right: 1px solid var(--line);
+      box-shadow: 4px 0 20px rgba(0,0,0,.12);
+      z-index: 150;
+      padding: 8px 0;
+      transform: translateX(-100%);
+      transition: transform .25s cubic-bezier(.4,0,.2,1);
+      overflow-y: auto;
+    }
+    .nav-drawer.open { transform: translateX(0); }
+    .nav-drawer-backdrop {
+      position: absolute;
+      top: 38px; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.28);
+      z-index: 149;
+      display: none;
+    }
+    .nav-drawer-backdrop.open { display: block; }
+    .nav-drawer .drawer-section-label {
+      font-size: 9px; font-weight: 600; color: #bbb;
+      text-transform: uppercase; letter-spacing: .55px;
+      padding: 10px 20px 4px;
+    }
+    .nav-drawer .drawer-link {
+      display: block; width: 100%;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px; font-weight: 500; color: #222;
+      background: none; border: none; cursor: pointer;
+      padding: 13px 20px; text-align: left;
+      transition: background .13s;
+      min-height: 44px;
+      letter-spacing: -.1px;
+    }
+    .nav-drawer .drawer-link:active { background: #f0f0f0; }
+    .nav-drawer hr { border: none; border-top: 1px solid var(--line); margin: 6px 0; }
+  }
+
+  /* ============================================================
+     TABLET — 769px–1100px
+     Shrink laptop frame to fit narrower viewports.
+     ============================================================ */
+  @media (min-width: 769px) and (max-width: 1100px) {
+    body { padding: 20px 12px; }
+    .laptop-lid { width: min(1020px, calc(100vw - 24px)); }
+    .laptop-base { width: min(1060px, calc(100vw - 16px)); }
+    .screen { width: 100%; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* Desktop: always hide drawer */
+  @media (min-width: 769px) {
+    .nav-drawer,
+    .nav-drawer-backdrop { display: none !important; }
+  }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1724,12 +1891,63 @@
     </div>
   </div>
 
+  <!-- Mobile nav drawer — toggled by hamburger on small screens -->
+  <div class="nav-drawer-backdrop" id="nav-drawer-backdrop" onclick="closeNavDrawer()"></div>
+  <div class="nav-drawer" id="nav-drawer">
+    <div id="nav-drawer-links"></div>
+  </div>
+
 </div>
 </div>
 <div class="laptop-base"><div class="trackpad"></div></div>
 </div>
 
 <script>
+/* ================================================================
+   MOBILE NAV DRAWER
+   ================================================================ */
+function toggleNavDrawer() {
+  const drawer = document.getElementById('nav-drawer');
+  const backdrop = document.getElementById('nav-drawer-backdrop');
+  if (!drawer) return;
+  drawer.classList.contains('open') ? closeNavDrawer() : openNavDrawer();
+}
+
+function openNavDrawer() {
+  const drawer = document.getElementById('nav-drawer');
+  const backdrop = document.getElementById('nav-drawer-backdrop');
+  renderNavDrawer();
+  drawer?.classList.add('open');
+  backdrop?.classList.add('open');
+}
+
+function closeNavDrawer() {
+  document.getElementById('nav-drawer')?.classList.remove('open');
+  document.getElementById('nav-drawer-backdrop')?.classList.remove('open');
+}
+
+function renderNavDrawer() {
+  const el = document.getElementById('nav-drawer-links');
+  if (!el) return;
+  const mode = STATE?.currentMode || 'customer';
+  let html = '';
+  if (mode === 'customer') {
+    html += `<div class="drawer-section-label">Menu</div>`;
+    html += `<button class="drawer-link" onclick="closeNavDrawer();goTo('home')">Home</button>`;
+    html += `<button class="drawer-link" onclick="closeNavDrawer();goTo('post-job')">Post a Job</button>`;
+    html += `<button class="drawer-link" onclick="closeNavDrawer();goTo('my-job')">My Jobs</button>`;
+    html += `<hr>`;
+    html += `<button class="drawer-link" style="color:#888;font-size:11px;" onclick="closeNavDrawer();setMode('notary')">Switch to Notary →</button>`;
+  } else {
+    html += `<div class="drawer-section-label">Notary</div>`;
+    html += `<button class="drawer-link" onclick="closeNavDrawer();goTo('notary-dashboard')">Dashboard</button>`;
+    html += `<button class="drawer-link" onclick="closeNavDrawer();goTo('my-bids')">My Bids</button>`;
+    html += `<hr>`;
+    html += `<button class="drawer-link" style="color:#888;font-size:11px;" onclick="closeNavDrawer();setMode('customer')">Switch to Customer →</button>`;
+  }
+  el.innerHTML = html;
+}
+
 /* ================================================================
    SUPABASE CONFIG
    Paste your Project URL and anon (publishable) key here.
@@ -4720,6 +4938,11 @@ document.addEventListener('click', e => {
       sbRealtime.subscribeToNotifications(session.user.id);
     }
   }
+
+  /* Wire hamburger buttons to nav drawer */
+  document.addEventListener('click', e => {
+    if (e.target.closest('.menu-btn')) toggleNavDrawer();
+  });
 
   setLegalLinks();
   seedIfEmpty();
