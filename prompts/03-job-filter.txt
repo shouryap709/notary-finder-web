@@ -1,0 +1,18 @@
+Add job search + filter to the notary dashboard. DON'T ask questions.
+
+Above the job feed, add a horizontal filter bar:
+- Search input (filters by service_type, notes, location_address -
+  case-insensitive substring match)
+- Service type dropdown (All, General Notarization, Mobile Notary, Loan
+  Signing, Apostille, Real Estate, etc.)
+- Max distance dropdown (5 / 10 / 25 / 50 miles, requires home location)
+- Price range: two number inputs "Min $ - Max $"
+- Date range: start date + end date
+- "Clear filters" link on the right when any filter is active
+
+All filtering is client-side over STATE.jobs - no new API calls.
+Filters compose (search AND service AND price AND...).
+
+Display the count of jobs matching: "Showing 12 of 47 jobs"
+
+Match existing aesthetic. Make ALL decisions yourself.

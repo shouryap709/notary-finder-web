@@ -1,0 +1,26 @@
+Add Print N' Parcel branding pass to notary-marketplace.html.
+DON'T ask questions.
+
+1. Site footer (visible on every page/screen):
+   "Operated by Print N' Parcel - 3654 Thornton Ave, Fremont, CA 94536 -
+    hello@printnparcel.com - (510) 555-0100"
+   (use placeholder phone if real one isn't documented in the code)
+   Style: 10px gray, centered, padded bottom
+
+2. Replace the page <title> with "NotaryFinder by Print N' Parcel"
+
+3. Add meta tags inside <head>:
+   - <meta name="description" content="Get a notary in the Bay Area.
+     Post your job, notaries bid, you pick the best price.">
+   - <meta property="og:title" content="NotaryFinder">
+   - <meta property="og:description" content="Bay Area notary marketplace.">
+
+4. Add favicon: a simple SVG inline favicon - small dark circle with
+   "NF" text, white on black. Use data: URL so it works without a file.
+
+5. Add an "About" link in the header that opens a modal with:
+   "NotaryFinder is operated by Print N' Parcel, a Fremont, CA shipping
+    and notary services business. We connect customers with verified
+    Bay Area notaries through a competitive bidding marketplace."
+
+Make ALL decisions yourself.

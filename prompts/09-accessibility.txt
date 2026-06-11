@@ -1,0 +1,17 @@
+Accessibility pass on notary-marketplace.html. DON'T ask questions.
+
+1. Every <button> with only an icon gets aria-label
+2. Every <input> has an associated <label> (use for/id linking)
+3. Modal dialogs:
+   - role="dialog" aria-modal="true"
+   - Focus traps inside (Tab cycles within modal)
+   - Esc closes
+   - Focus returns to the trigger element on close
+4. Every form has aria-required on required inputs
+5. Error messages get role="alert" and aria-live="polite"
+6. Color contrast: any text below #888 on white gets bumped to #666 minimum
+7. Skip-to-main-content link at top (visible only on keyboard focus)
+8. Tab order is logical throughout (use tabindex sparingly, only -1 to
+   remove from order)
+
+Make ALL decisions yourself.

@@ -17,6 +17,7 @@ create extension if not exists "pgcrypto";
 -- ============================================================
 -- profiles — one row per Supabase auth user
 -- ============================================================
+
 create table if not exists public.profiles (
   id             uuid primary key references auth.users on delete cascade,
   role           text not null check (role in ('customer', 'notary')),

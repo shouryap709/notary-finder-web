@@ -1,0 +1,25 @@
+Polish pass: add loading states, empty states, and better form errors
+throughout notary-marketplace.html. DON'T ask questions. Make decisions.
+
+1. Every data-fetching action (sbHydrate, fetchNotaryProfile, etc.) shows
+   a skeleton state while loading - gray rectangle bars where content
+   will appear. No spinners.
+
+2. Every list view (jobs, bids, reviews, notifications) has an empty
+   state with friendly copy and gray illustration text:
+   - "No open jobs yet - check back soon"
+   - "No bids on your job yet - notaries will start bidding shortly"
+   - "No notifications"
+   etc.
+
+3. Every form input that fails validation shows a small red error message
+   directly below the field (not a generic banner). Errors appear on
+   blur, clear on next focus.
+
+4. Every Supabase mutation that errors shows an inline toast at the
+   top-right corner. Toast slides in, auto-dismisses after 4s.
+
+Match the existing minimal aesthetic - gray text, no flashy animations,
+DM Sans, matches existing border-radius and spacing.
+
+Make ALL decisions yourself. Don't ask.

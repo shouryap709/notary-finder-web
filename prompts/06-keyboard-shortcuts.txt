@@ -1,0 +1,18 @@
+Add keyboard shortcuts to notary-marketplace.html. DON'T ask questions.
+
+Global shortcuts (use addEventListener on document):
+- /        focus the global search/filter input
+- Esc      close current modal / navigate back
+- n        new job (customer side) - opens post-job flow
+- b        my bids (notary side)
+- j        my jobs (customer side)
+- ?        opens a help modal listing all shortcuts
+
+Don't trigger shortcuts when typing in an input/textarea (check
+event.target.tagName).
+
+Show a small "Press ? for shortcuts" hint in the footer (gray 10px).
+
+Make the help modal match the existing modal aesthetic.
+
+Make ALL decisions yourself.

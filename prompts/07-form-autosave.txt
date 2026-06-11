@@ -1,0 +1,20 @@
+Add form auto-save to the post-job flow. DON'T ask questions.
+
+The post-job flow has multiple steps. Users lose data if they refresh
+or switch tabs. Fix this:
+
+- On every input change in the post-job form, save the current state
+  to localStorage under key 'pendingJobDraft'
+- Save: service type, services array, signatures, notary preference,
+  location address, lat/lng, date/time, notes, starting price,
+  name, email, phone
+- DO NOT save the password field (security)
+- On page load, if 'pendingJobDraft' exists, show a small banner at
+  the top of the post-job flow: "Restore your in-progress job?"
+  with "Restore" and "Discard" buttons
+- "Restore" repopulates all fields. "Discard" deletes the draft.
+- On successful job submission, clear the draft.
+
+Same pattern for the notary signup form (without password).
+
+Match existing aesthetic. Make ALL decisions yourself.

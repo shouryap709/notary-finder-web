@@ -1,0 +1,21 @@
+Make notary-marketplace.html fully mobile responsive. DON'T ask questions.
+
+Right now the design is in a 1020px laptop frame. On mobile (<768px wide):
+- Hide the laptop chrome entirely (no laptop frame, no base)
+- Screen takes up full viewport
+- All padding and font sizes scale down appropriately
+- Forms stack vertically with full-width inputs
+- Buttons full-width, taller (44px min for tap targets)
+- Modals take the whole screen with a back arrow instead of close X
+- Map height drops to 160px instead of 200px
+- Header simplifies (logo only, no full nav)
+
+Test breakpoints:
+- < 480px: phone portrait
+- 480-768px: phone landscape / small tablet
+- > 768px: keep existing laptop frame design
+
+Use a single media query block at the bottom of the existing <style>.
+Don't refactor existing CSS - just add overrides.
+
+Make ALL decisions yourself.

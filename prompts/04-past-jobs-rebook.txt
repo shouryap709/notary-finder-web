@@ -1,0 +1,19 @@
+Add past jobs view + rebook button for customers. DON'T ask questions.
+
+In the customer's "My Jobs" view, add a tab/toggle: "Active | Past".
+- Active tab: shows status in (open, accepted)
+- Past tab: shows status in (completed, cancelled)
+
+On each past job card, add:
+- "Book again" button that pre-fills the post-job flow with this job's
+  service_type, signatures, notes, location (skip price - recompute
+  based on current pricing logic)
+- The customer hits "Post" and a new job is created with the prefilled
+  values
+
+Also show on each past job:
+- Outcome label: "Completed by [notary]" or "Cancelled"
+- Final price paid
+- Date
+
+Match existing aesthetic. Make ALL decisions yourself.

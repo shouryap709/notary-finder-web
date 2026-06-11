@@ -1,0 +1,26 @@
+Add URL hash-based routing to notary-marketplace.html. DON'T ask
+questions.
+
+Right now navigation is JS-only - refreshing loses the user's position.
+Add hash routing using window.history.pushState and hashchange events.
+
+Routes:
+- #/                   -> home
+- #/post               -> customer post-job flow
+- #/my-jobs            -> customer my jobs
+- #/notary             -> notary login/dashboard
+- #/notary/dashboard   -> notary dashboard (when logged in)
+- #/job/:id            -> specific job detail (for bid view)
+- #/notary/:id         -> notary public profile (if that feature exists)
+
+Implementation:
+- A small router() function reads window.location.hash and routes to
+  the correct screen
+- Update goToScreen() or whatever the existing nav function is to
+  also call history.pushState
+- Listen for hashchange / popstate events to handle back button
+- On initial page load, parse hash and navigate
+
+Browser back/forward buttons should work naturally after this.
+
+Make ALL decisions yourself.

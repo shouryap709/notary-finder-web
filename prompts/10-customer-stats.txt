@@ -1,0 +1,18 @@
+Add a customer stats panel to "My Jobs" header. DON'T ask questions.
+
+In the customer's "My Jobs" view, above the active/past tabs, show a
+horizontal row of three stat cards:
+- "Jobs posted"   - total count from STATE.jobs where customer is current user
+- "Notaries used" - distinct count of accepted bid notary_ids
+- "Total spent"   - sum of accepted bid prices on completed jobs
+
+Each card: 80px tall, gray border, large number, small gray label.
+Match the existing minimal aesthetic.
+
+If the customer has zero jobs, hide the panel entirely (don't show empty
+stats - feels sad).
+
+Add a smooth count-up animation when the panel first renders (0 to N
+over 600ms).
+
+Make ALL decisions yourself.

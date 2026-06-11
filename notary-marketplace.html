@@ -769,9 +769,10 @@
   .modal-summary-row .val { color: #000; font-weight: 500; }
   .modal-summary-row.lowest .val { color: #000; font-weight: 600; }
 
-  /* Toast — small notification at the top */
+  /* Toast — slides in from top-right corner */
   .toast-wrap {
-    position: absolute; top: 48px; left: 50%; transform: translateX(-50%) translateY(-12px);
+    position: absolute; top: 48px; right: 12px;
+    transform: translateX(10px);
     z-index: 300;
     background: #000; color: #fff;
     padding: 8px 14px; border-radius: 7px;
@@ -779,10 +780,13 @@
     opacity: 0; pointer-events: none;
     transition: opacity .22s, transform .22s cubic-bezier(.4,0,.2,1);
     box-shadow: 0 8px 24px rgba(0,0,0,.25);
-    white-space: nowrap;
+    white-space: nowrap; max-width: 260px;
   }
   .toast-wrap.on {
-    opacity: 1; transform: translateX(-50%) translateY(0);
+    opacity: 1; transform: translateX(0);
+  }
+  .toast-wrap.toast-error {
+    background: var(--accent-red);
   }
 
   /* ============================================================
@@ -954,6 +958,38 @@
     background: linear-gradient(90deg,#f0f0f0 25%,#e6e6e6 50%,#f0f0f0 75%);
     background-size: 200% 100%;
     animation: sk-shimmer 1.4s ease-in-out infinite;
+  }
+
+  /* Page-level loading skeleton card */
+  .sk-job-card {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 13px;
+    margin-bottom: 8px;
+  }
+  .sk-stat-val {
+    display: inline-block; width: 44px; height: 22px;
+    border-radius: 4px; vertical-align: middle;
+  }
+
+  /* Empty state illustration (gray icon above copy) */
+  .es-icon {
+    font-size: 22px; color: #e0e0e0; margin-bottom: 9px;
+    line-height: 1; display: flex; justify-content: center; align-items: center;
+  }
+  .es-icon svg { display: block; }
+
+  /* Skeleton card wrappers */
+  .sk-bid-card {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 13px; margin-bottom: 8px;
+  }
+  .sk-mybid-card {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 13px; margin-bottom: 8px;
+  }
+  .sk-notif-row {
+    display: flex; gap: 8px; padding: 8px 11px;
+    border-bottom: 1px solid #f7f7f7;
   }
 
   /* Clickable notary name link in customer UI */
@@ -1134,6 +1170,7 @@
 
     /* ---- Notification panel ---- */
     #notif-panel { width: calc(100% - 16px); right: 8px; left: 8px; top: 42px; }
+    .toast-wrap { right: 8px; max-width: calc(100vw - 16px); }
 
     /* ---- Nav drawer ---- */
     .nav-drawer {
@@ -1887,7 +1924,7 @@
       </div>
     </div>
     <div class="np-list" id="np-list">
-      <div class="np-empty">No notifications yet.</div>
+      <div class="np-empty">No notifications</div>
     </div>
   </div>
 
@@ -1988,6 +2025,10 @@ let sbUser = null;
 /* In-memory notification list — synced from DB and realtime */
 let notifList = [];
 
+/* Loading-state flags for skeleton rendering */
+let isHydrating = false;
+let notifLoading = false;
+
 /* ================================================================
    MONITORING — Sentry + PostHog init + thin wrappers
    ================================================================ */
@@ -2022,7 +2063,7 @@ async function getSignedFileUrl(bucket, path, expiresIn = 60) {
 async function openSignedUrl(bucket, path) {
   const url = await getSignedFileUrl(bucket, path);
   if (url) window.open(url, '_blank', 'noopener');
-  else toast('Could not generate download link — try again.');
+  else errorToast('Could not generate download link — try again.');
 }
 
 /* Tracks the file the customer selected in the document step. */
@@ -2611,7 +2652,7 @@ $jobForm.addEventListener('submit', async e => {
         return;
       }
     } catch (err) {
-      toast('Sign-in failed: ' + (err.message || 'check your password'));
+      errorToast('Sign-in failed: ' + (err.message || 'check your password'));
       setLoading(submitBtn, false);
       return;
     }
@@ -2716,13 +2757,43 @@ function pickMessage(job) {
    ================================================================ */
 function renderMyJob(opts = {}) {
   const root = document.getElementById('my-job-content');
+
+  if (isHydrating) {
+    root.innerHTML = `
+      <div class="sk-block" style="height:36px;border-radius:7px;margin-bottom:14px;"></div>
+      <div class="card job-summary" style="margin-bottom:18px;">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          <div class="sk-block" style="width:60%;height:13px;border-radius:3px;"></div>
+          <div class="sk-block" style="width:80%;height:9px;border-radius:3px;"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding-top:10px;border-top:1px solid var(--line-soft);">
+          ${[1,2,3].map(()=>`<div class="sk-block" style="height:28px;border-radius:3px;"></div>`).join('')}
+        </div>
+      </div>
+      <div class="sk-block" style="width:100px;height:9px;border-radius:3px;margin-bottom:12px;"></div>
+      ${[1,2].map(()=>`
+        <div class="sk-job-card" style="margin-bottom:8px;">
+          <div style="display:flex;gap:11px;align-items:flex-start;">
+            <div class="sk-block" style="width:38px;height:38px;border-radius:50%;flex-shrink:0;"></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0;">
+              <div class="sk-block" style="width:50%;height:12px;border-radius:3px;"></div>
+              <div class="sk-block" style="width:70%;height:9px;border-radius:3px;"></div>
+            </div>
+            <div class="sk-block" style="width:40px;height:20px;border-radius:3px;flex-shrink:0;"></div>
+          </div>
+        </div>`).join('')}
+    `;
+    return;
+  }
+
   const job = findUserJob();
 
   if (!job) {
     root.innerHTML = `
       <div class="empty-state">
-        <div class="es-title">You haven't posted a job yet.</div>
-        <div class="es-sub">Post a job and notaries will start bidding within minutes.</div>
+        <div class="es-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0e0e0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></div>
+        <div class="es-title">You haven't posted a job yet</div>
+        <div class="es-sub">Post a job and verified notaries near you will start bidding within minutes.</div>
         <div style="margin-top:14px;">
           <button class="btn btn-primary btn-sm" onclick="goTo('post-job')">Post a Job</button>
         </div>
@@ -2803,12 +2874,19 @@ function renderMyJob(opts = {}) {
 
 function renderLiveBids(bids, job, newBidId = null) {
   bids = bids.filter(b => b.status === 'pending');
+  if (isHydrating) {
+    return `
+      <div class="section-label">Live bids <span class="count">loading…</span></div>
+      ${[1,2].map(() => renderBidCardSkeleton()).join('')}
+    `;
+  }
   if (bids.length === 0) {
     return `
       <div class="section-label">Live bids <span class="count">waiting…</span></div>
       <div class="empty-state">
-        <div class="es-title">No bids yet — sit tight.</div>
-        <div class="es-sub">Notaries near you are reviewing your job. New bids will appear here in real time.</div>
+        <div class="es-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0e0e0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <div class="es-title">No bids on your job yet</div>
+        <div class="es-sub">Notaries will start bidding shortly — new bids appear here in real time.</div>
       </div>
     `;
   }
@@ -2908,6 +2986,87 @@ function escapeHTML(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
+/* ================================================================
+   Skeleton rendering helpers
+   ================================================================ */
+function renderJobCardSkeleton() {
+  return `
+    <div class="sk-job-card">
+      <div class="job-card-row" style="gap:12px;">
+        <div class="sk-block" style="width:40px;height:40px;border-radius:8px;flex-shrink:0;"></div>
+        <div style="flex:1;min-width:0;">
+          <div class="sk-block" style="width:58%;height:12px;border-radius:4px;margin-bottom:7px;"></div>
+          <div class="sk-block" style="width:80%;height:9px;border-radius:4px;margin-bottom:7px;"></div>
+          <div style="display:flex;gap:4px;margin-top:2px;">
+            <div class="sk-block" style="width:60px;height:18px;border-radius:3px;"></div>
+            <div class="sk-block" style="width:90px;height:18px;border-radius:3px;"></div>
+          </div>
+        </div>
+        <div style="flex-shrink:0;text-align:right;">
+          <div class="sk-block" style="width:32px;height:9px;border-radius:3px;margin-bottom:6px;margin-left:auto;"></div>
+          <div class="sk-block" style="width:44px;height:22px;border-radius:4px;margin-left:auto;"></div>
+        </div>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line-soft);display:flex;justify-content:space-between;align-items:center;">
+        <div class="sk-block" style="width:38%;height:9px;border-radius:4px;"></div>
+        <div class="sk-block" style="width:68px;height:26px;border-radius:6px;"></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderBidCardSkeleton() {
+  return `
+    <div class="sk-bid-card">
+      <div class="bid-row">
+        <div class="sk-block" style="width:38px;height:38px;border-radius:50%;flex-shrink:0;"></div>
+        <div style="flex:1;min-width:0;">
+          <div class="sk-block" style="width:44%;height:12px;border-radius:4px;margin-bottom:7px;"></div>
+          <div class="sk-block" style="width:30%;height:9px;border-radius:4px;margin-bottom:6px;"></div>
+          <div class="sk-block" style="width:55%;height:9px;border-radius:4px;"></div>
+        </div>
+        <div style="flex-shrink:0;text-align:right;">
+          <div class="sk-block" style="width:36px;height:22px;border-radius:4px;margin-left:auto;margin-bottom:6px;"></div>
+          <div class="sk-block" style="width:44px;height:8px;border-radius:3px;margin-left:auto;"></div>
+        </div>
+      </div>
+      <div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--line-soft);">
+        <div class="sk-block" style="width:28%;height:9px;border-radius:4px;"></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderMyBidCardSkeleton() {
+  return `
+    <div class="sk-mybid-card">
+      <div class="mybid-row">
+        <div style="flex:1;min-width:0;">
+          <div class="sk-block" style="width:55%;height:12px;border-radius:4px;margin-bottom:7px;"></div>
+          <div class="sk-block" style="width:70%;height:9px;border-radius:4px;"></div>
+        </div>
+        <div style="flex-shrink:0;text-align:right;">
+          <div class="sk-block" style="width:40px;height:16px;border-radius:4px;margin-bottom:6px;margin-left:auto;"></div>
+          <div class="sk-block" style="width:52px;height:14px;border-radius:4px;margin-left:auto;"></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderNotifItemSkeleton() {
+  return `
+    <div class="sk-notif-row">
+      <div class="sk-block" style="width:22px;height:22px;border-radius:50%;flex-shrink:0;margin-top:1px;"></div>
+      <div style="flex:1;min-width:0;">
+        <div class="sk-block" style="width:65%;height:9px;border-radius:4px;margin-bottom:5px;"></div>
+        <div class="sk-block" style="width:88%;height:8px;border-radius:4px;margin-bottom:5px;"></div>
+        <div class="sk-block" style="width:28%;height:7px;border-radius:4px;"></div>
+      </div>
+    </div>
+  `;
+}
+
 function acceptBid(bidId) {
   const bid = STATE.bids.find(b => b.id === bidId);
   if (!bid) return;
@@ -2967,17 +3126,26 @@ function renderDashboard() {
     .filter(b => b.placedAt >= weekAgo)
     .reduce((sum, b) => sum + b.price, 0);
 
-  document.getElementById('stat-active').textContent = activeBids.length;
-  document.getElementById('stat-won').textContent = wonBids.length;
-  document.getElementById('stat-earnings').textContent = '$' + weekEarnings;
+  if (isHydrating) {
+    ['stat-active','stat-won','stat-earnings','stat-rating'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '<span class="sk-block sk-stat-val"></span>';
+    });
+    const reviewsEl = document.getElementById('stat-reviews');
+    if (reviewsEl) reviewsEl.innerHTML = '<span class="sk-block" style="display:inline-block;width:60px;height:9px;border-radius:3px;vertical-align:middle;"></span>';
+  } else {
+    document.getElementById('stat-active').textContent = activeBids.length;
+    document.getElementById('stat-won').textContent = wonBids.length;
+    document.getElementById('stat-earnings').textContent = '$' + weekEarnings;
 
-  const demoNotary = STATE.notaries.find(n => n.id === STATE.notaryUser.id);
-  const myRating      = notarySession?._rating       ?? demoNotary?.rating   ?? 5.0;
-  const myReviewCount = notarySession?._reviewsCount ?? demoNotary?.reviews   ?? 0;
-  const ratingEl  = document.getElementById('stat-rating');
-  const reviewsEl = document.getElementById('stat-reviews');
-  if (ratingEl)  ratingEl.textContent  = Number(myRating).toFixed(1);
-  if (reviewsEl) reviewsEl.textContent = myReviewCount + (myReviewCount === 1 ? ' review' : ' reviews');
+    const demoNotary = STATE.notaries.find(n => n.id === STATE.notaryUser.id);
+    const myRating      = notarySession?._rating       ?? demoNotary?.rating   ?? 5.0;
+    const myReviewCount = notarySession?._reviewsCount ?? demoNotary?.reviews   ?? 0;
+    const ratingEl  = document.getElementById('stat-rating');
+    const reviewsEl = document.getElementById('stat-reviews');
+    if (ratingEl)  ratingEl.textContent  = Number(myRating).toFixed(1);
+    if (reviewsEl) reviewsEl.textContent = myReviewCount + (myReviewCount === 1 ? ' review' : ' reviews');
+  }
 
   // Open jobs the current notary hasn't already bid on.
   const myBidJobIds = new Set(myBids.map(b => b.jobId));
@@ -3037,11 +3205,14 @@ function renderDashboard() {
   document.getElementById('dash-job-count').textContent = filteredJobs.length + ' open near you';
 
   const list = document.getElementById('dash-jobs-list');
-  if (filteredJobs.length === 0) {
+  if (isHydrating) {
+    list.innerHTML = [1,2,3].map(() => renderJobCardSkeleton()).join('');
+  } else if (filteredJobs.length === 0) {
     list.innerHTML = `
       <div class="empty-state">
-        <div class="es-title">No open jobs right now.</div>
-        <div class="es-sub">New jobs will appear here as customers post them.</div>
+        <div class="es-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0e0e0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+        <div class="es-title">No open jobs yet</div>
+        <div class="es-sub">Check back soon — new jobs appear here as customers post them.</div>
       </div>
     `;
   } else {
@@ -3257,7 +3428,7 @@ $bmSubmit.addEventListener('click', async () => {
       $bmPriceErr.textContent = `Your bid must be lower than the customer's $${ceiling} starting price.`;
       field.classList.add('has-error');
     } else {
-      toast('Failed to save bid — please try again.');
+      errorToast('Failed to save bid — please try again.');
     }
     setLoading($bmSubmit, false);
     return;
@@ -3312,11 +3483,22 @@ function renderMyBidsList() {
   filtered.sort((a, b) => b.placedAt - a.placedAt);
 
   const root = document.getElementById('my-bids-list');
+  if (isHydrating) {
+    root.innerHTML = [1,2,3].map(() => renderMyBidCardSkeleton()).join('');
+    return;
+  }
   if (filtered.length === 0) {
+    const emptyMsgs = {
+      active: { title: 'No active bids.', sub: 'Place a bid from the dashboard to see it here.' },
+      won:    { title: 'No won jobs yet.', sub: 'Accepted bids will appear in this tab.' },
+      lost:   { title: 'No lost bids.', sub: 'Past bids you missed will show up here.' }
+    };
+    const { title, sub } = emptyMsgs[activeBidsTab] || emptyMsgs.active;
     root.innerHTML = `
       <div class="empty-state">
-        <div class="es-title">Nothing here yet.</div>
-        <div class="es-sub">${activeBidsTab === 'active' ? 'Place a bid from the dashboard to see it here.' : 'Past bids will show up in this tab.'}</div>
+        <div class="es-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0e0e0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L3 6v6c0 5 4 9 9 10 5-1 9-5 9-10V6z"/></svg></div>
+        <div class="es-title">${title}</div>
+        <div class="es-sub">${sub}</div>
       </div>
     `;
     return;
@@ -3457,7 +3639,7 @@ async function submitNotaryLogin() {
         selectedLicenseFile = null;
       }
     } catch (err) {
-      toast('Sign-in failed: ' + (err.message || 'check your password'));
+      errorToast('Sign-in failed: ' + (err.message || 'check your password'));
       setLoading(btn, false);
       return;
     }
@@ -3630,6 +3812,7 @@ async function saveNotarySettings() {
     } catch (e) {
       sentryCapture(e);
       console.warn('[Supabase] save notary settings:', e);
+      errorToast('Failed to save settings — please try again.');
     }
   }
   showAllJobs = false;
@@ -3989,6 +4172,7 @@ async function sbSaveJob(job) {
   } catch (e) {
     sentryCapture(e);
     console.warn('[Supabase] job insert:', e);
+    errorToast('Failed to post job — please try again.');
   }
 }
 
@@ -4074,6 +4258,7 @@ async function sbAcceptBid(jobId, bidId) {
   } catch (e) {
     sentryCapture(e);
     console.warn('[Supabase] accept bid:', e);
+    errorToast('Failed to accept bid — please try again.');
   }
 }
 
@@ -4103,6 +4288,7 @@ async function sbCancelJob(jobId) {
   } catch (e) {
     sentryCapture(e);
     console.warn('[Supabase] cancel job:', e);
+    errorToast('Failed to cancel job — please try again.');
   }
 }
 
@@ -4126,6 +4312,7 @@ async function sbCancelBid(bidId) {
   } catch (e) {
     sentryCapture(e);
     console.warn('[Supabase] cancel bid:', e);
+    errorToast('Failed to withdraw bid — please try again.');
   }
 }
 
@@ -4156,6 +4343,7 @@ async function sbCompleteJob(jobId) {
     } catch (e) {
       sentryCapture(e);
       console.warn('[Supabase] complete job:', e);
+      errorToast('Failed to mark job as complete — please try again.');
     }
   }
   const acceptedBid = STATE.bids.find(b => b.id === job.acceptedBidId);
@@ -4237,8 +4425,12 @@ function renderNotifBadges() {
 function renderNotifPanel() {
   const list = document.getElementById('np-list');
   if (!list) return;
+  if (notifLoading) {
+    list.innerHTML = [1,2,3].map(() => renderNotifItemSkeleton()).join('');
+    return;
+  }
   if (notifList.length === 0) {
-    list.innerHTML = '<div class="np-empty">No notifications yet.</div>';
+    list.innerHTML = '<div class="np-empty" style="padding:24px 12px;"><div style="font-size:20px;color:#e8e8e8;margin-bottom:7px;text-align:center;">◇</div><div>No notifications</div></div>';
     return;
   }
   list.innerHTML = notifList
@@ -4296,6 +4488,7 @@ async function sbCreateNotification({ userId, type, title, body = null, link_tar
 
 async function sbLoadNotifications() {
   if (!sb || !sbUser) return;
+  notifLoading = true;
   try {
     const { data, error } = await sb.from('notifications')
       .select('*')
@@ -4315,6 +4508,10 @@ async function sbLoadNotifications() {
     renderNotifBadges();
   } catch (e) {
     console.warn('[Supabase] load notifications:', e);
+    errorToast('Could not load notifications.');
+  } finally {
+    notifLoading = false;
+    renderNotifPanel();
   }
 }
 
@@ -4633,16 +4830,21 @@ function setLoading(btn, loading) {
 }
 
 /* ================================================================
-   Toast (small notification banner)
+   Toast (slides in from top-right)
+   type: 'info' (default, black) | 'error' (red, 4s)
    ================================================================ */
 let toastTimer = null;
-function toast(msg) {
+function toast(msg, type) {
   const el = document.getElementById('toast');
   el.textContent = msg;
+  el.classList.remove('toast-error');
+  if (type === 'error') el.classList.add('toast-error');
   el.classList.add('on');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('on'), 2200);
+  const dur = type === 'error' ? 4000 : 2200;
+  toastTimer = setTimeout(() => { el.classList.remove('on', 'toast-error'); }, dur);
 }
+function errorToast(msg) { toast(msg, 'error'); }
 
 /* ================================================================
    REVIEW MODAL
@@ -4847,7 +5049,7 @@ function renderNotaryProfileContent({ profile: p, recentReviews, completedJobs }
 
     <div class="section-label" style="margin-bottom:8px;">Recent reviews</div>
     ${recentReviews.length === 0
-      ? '<div style="font-size:9.5px;color:#bbb;padding:6px 0;">No reviews yet.</div>'
+      ? '<div style="font-size:9px;color:#ccc;padding:10px 0;text-align:center;"><div style="font-size:18px;margin-bottom:5px;">☆</div>No reviews yet.</div>'
       : recentReviews.map(r => `
           <div style="margin-bottom:8px;padding:9px 11px;background:#fafafa;border-radius:7px;border:1px solid #ebebeb;">
             <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
@@ -4896,6 +5098,65 @@ document.getElementById('rev-submit').addEventListener('click', async () => {
 });
 
 buildReviewStars();
+
+/* ================================================================
+   BLUR VALIDATION — show field errors on blur, clear on focus
+   ================================================================ */
+(function attachBlurValidation() {
+  function blurRule(inputId, isValid, fieldId) {
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    const getField = () => fieldId ? document.getElementById(fieldId) : el.closest('.field');
+    el.addEventListener('blur', () => {
+      const f = getField();
+      if (f) f.classList.toggle('has-error', !isValid());
+    });
+    el.addEventListener('focus', () => {
+      const f = getField();
+      if (f) f.classList.remove('has-error');
+    });
+  }
+
+  // Post-job form fields
+  blurRule('jf-signatures', () => { const v = +document.getElementById('jf-signatures')?.value; return v >= 1; });
+  blurRule('jf-location',   () => (document.getElementById('jf-location')?.value || '').trim().length > 0);
+  blurRule('jf-datetime',   () => !!document.getElementById('jf-datetime')?.value);
+  blurRule('jf-price',      () => { const v = +document.getElementById('jf-price')?.value; return v > 0; });
+  blurRule('jf-name',       () => (document.getElementById('jf-name')?.value || '').trim().length > 0);
+  blurRule('jf-email',      () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('jf-email')?.value || ''));
+  blurRule('jf-password',   () => !sb || (document.getElementById('jf-password')?.value || '').length >= 6);
+
+  // Notary login fields
+  blurRule('nl-name',     () => (document.getElementById('nl-name')?.value     || '').trim().length > 0, 'nl-name-field');
+  blurRule('nl-email',    () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('nl-email')?.value || ''), 'nl-email-field');
+  blurRule('nl-phone',    () => (document.getElementById('nl-phone')?.value    || '').trim().length > 0, 'nl-phone-field');
+  blurRule('nl-license',  () => (document.getElementById('nl-license')?.value  || '').trim().length > 0, 'nl-license-field');
+  blurRule('nl-password', () => !sb || (document.getElementById('nl-password')?.value || '').length >= 6, 'nl-password-field');
+
+  // Set-password page
+  blurRule('sp-password', () => (document.getElementById('sp-password')?.value || '').length >= 6, 'sp-password-field');
+  blurRule('sp-confirm',  () => {
+    const pw = document.getElementById('sp-password')?.value;
+    const cf = document.getElementById('sp-confirm')?.value;
+    return !!cf && cf === pw;
+  }, 'sp-confirm-field');
+
+  // Bid modal price (has custom error text)
+  const bmPriceEl = document.getElementById('bm-price');
+  if (bmPriceEl) {
+    bmPriceEl.addEventListener('blur', () => {
+      const v = +bmPriceEl.value;
+      const f = bmPriceEl.closest('.field');
+      if (f && (!v || v < 1)) {
+        $bmPriceErr.textContent = 'Enter a valid bid amount.';
+        f.classList.add('has-error');
+      }
+    });
+    bmPriceEl.addEventListener('focus', () => {
+      bmPriceEl.closest('.field').classList.remove('has-error');
+    });
+  }
+})();
 
 // Close notification panel when clicking outside it
 document.addEventListener('click', e => {
@@ -4957,15 +5218,19 @@ document.addEventListener('click', e => {
   });
   goTo('home');
 
-  // Hydrate from Supabase in the background — doesn't block the UI.
-  // On success, re-render whatever page is currently active.
+  // Hydrate from Supabase in the background — skeletons shown on dynamic pages until done.
   if (sb) {
+    isHydrating = true;
     sbHydrate().then(() => {
+      isHydrating = false;
       const activeId = document.querySelector('.page.active')?.id;
       if (activeId === 'my-job')           renderMyJob();
       if (activeId === 'notary-dashboard') renderDashboard();
       if (activeId === 'my-bids')          renderMyBids();
-    }).catch(err => console.warn('[Supabase] background hydrate error:', err));
+    }).catch(err => {
+      isHydrating = false;
+      console.warn('[Supabase] background hydrate error:', err);
+    });
   }
 })();
 </script>
