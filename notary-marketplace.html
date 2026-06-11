@@ -907,6 +907,35 @@
   .avail-day.blocked .avail-num { color: var(--text-ghost); text-decoration: line-through; }
 
   /* ============================================================
+     First-time onboarding tour
+     ============================================================ */
+  #tour-root { position: absolute; inset: 0; z-index: 500; }
+  #tour-spotlight {
+    position: absolute; border-radius: 8px;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,.62);
+    transition: all .28s cubic-bezier(.4,0,.2,1);
+    pointer-events: none; top: 50%; left: 50%;
+    width: 0; height: 0;
+  }
+  #tour-card {
+    position: absolute; width: 226px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 11px; padding: 14px 15px;
+    box-shadow: 0 14px 44px rgba(0,0,0,.32);
+    transition: top .28s cubic-bezier(.4,0,.2,1), left .28s cubic-bezier(.4,0,.2,1);
+  }
+  #tour-step-label { font-size: 8px; font-weight: 700; letter-spacing: .5px;
+    text-transform: uppercase; color: var(--text-faint); margin-bottom: 5px; }
+  #tour-title { font-size: 13px; font-weight: 600; color: var(--fg); letter-spacing: -.3px; margin-bottom: 5px; }
+  #tour-body { font-size: 10px; line-height: 1.55; color: var(--text-muted); margin-bottom: 13px; }
+  #tour-actions { display: flex; align-items: center; justify-content: space-between; }
+  .tour-skip {
+    background: none; border: none; cursor: pointer; padding: 4px 2px;
+    font-family: 'DM Sans',sans-serif; font-size: 9.5px; color: var(--text-faint);
+  }
+  .tour-skip:hover { color: var(--text); }
+
+  /* ============================================================
      Loading state — applied to submit buttons during async ops
      ============================================================ */
   .btn-loading { opacity: .6; pointer-events: none; }
@@ -1349,7 +1378,7 @@
       <nav class="nav" data-mode-nav="customer">
         <button class="nav-btn active" onclick="goTo('home')">Home</button>
         <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
-        <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
+        <button class="nav-btn" data-tour="cust-myjobs" onclick="goTo('my-job')">My Jobs</button>
       </nav>
       <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode"></button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
@@ -1363,11 +1392,11 @@
       <h1>Get your documents notarized — <em>let notaries compete for your job.</em></h1>
       <p class="subtitle">Post your job in 60 seconds. Verified notaries near you bid in real time.<br>You pick the best price, rating, or location. No middleman.</p>
       <div class="hero-ctas">
-        <button class="btn btn-primary btn-block" onclick="goTo('post-job')">Post a Job</button>
+        <button class="btn btn-primary btn-block" data-tour="cust-post" onclick="goTo('post-job')">Post a Job</button>
         <button class="notary-link" onclick="setMode('notary')">Are you a notary? Sign in here →</button>
       </div>
 
-      <div class="how-it-works">
+      <div class="how-it-works" data-tour="cust-results">
         <div class="hiw-card">
           <div class="hiw-num">1</div>
           <div class="hiw-title">Post your job</div>
@@ -1679,7 +1708,7 @@
       <div class="logo" onclick="goTo('notary-dashboard')">Notary<em>Finder</em></div>
       <nav class="nav" data-mode-nav="notary">
         <button class="nav-btn active" onclick="goTo('notary-dashboard')">Dashboard</button>
-        <button class="nav-btn" onclick="goTo('my-bids')">My Bids</button>
+        <button class="nav-btn" data-tour="not-mybids" onclick="goTo('my-bids')">My Bids</button>
       </nav>
       <button class="notary-pill" id="notary-pill-dashboard" onclick="signOutNotary()"></button>
       <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode"></button>
@@ -1699,7 +1728,7 @@
       <div id="notary-settings-panel" style="display:none;"></div>
       <div id="dash-distance-banner"></div>
 
-      <div class="stats-row">
+      <div class="stats-row" data-tour="not-stats">
         <div class="stat-card">
           <div class="stat-label">Active Bids</div>
           <div class="stat-value" id="stat-active">—</div>
@@ -1723,7 +1752,7 @@
       </div>
 
       <div class="section-label">Available jobs <span class="count" id="dash-job-count"></span></div>
-      <div class="dash-jobs-list" id="dash-jobs-list">
+      <div class="dash-jobs-list" id="dash-jobs-list" data-tour="not-jobs">
         <!-- Rendered dynamically -->
       </div>
       <div id="dash-past-bids"></div>
@@ -2036,6 +2065,20 @@
           <input type="text" id="msg-input" class="field-input" placeholder="Type a message…" autocomplete="off">
           <button type="submit" class="btn btn-primary btn-sm">Send</button>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- First-time onboarding tour -->
+  <div id="tour-root" style="display:none;">
+    <div id="tour-spotlight"></div>
+    <div id="tour-card">
+      <div id="tour-step-label"></div>
+      <div id="tour-title"></div>
+      <div id="tour-body"></div>
+      <div id="tour-actions">
+        <button class="tour-skip" onclick="endTour()">Skip</button>
+        <button class="tour-next btn btn-primary btn-sm" onclick="tourNext()">Next</button>
       </div>
     </div>
   </div>
@@ -2469,6 +2512,7 @@ function goTo(pageId) {
   if (pageId === 'notary-dashboard') {
     sbLoadUnavailable().then(() => { if (document.getElementById('notary-dashboard').classList.contains('active')) renderDashboard(); });
     renderDashboard(); renderNotaryHeaderPill();
+    setTimeout(() => { if (document.getElementById('notary-dashboard').classList.contains('active')) maybeStartTour('notary'); }, 500);
   }
   if (pageId === 'my-bids') { renderMyBids(); renderNotaryHeaderPill(); }
   if (pageId === 'post-job') resetPostJobForm();
@@ -4931,6 +4975,107 @@ function toggleTheme() {
 })();
 
 /* ================================================================
+   FIRST-TIME ONBOARDING TOUR — spotlight walkthrough
+   ================================================================ */
+let _tourRole = null;
+let _tourIdx = 0;
+
+const TOUR_STEPS = {
+  customer: [
+    { sel: null, title: 'Welcome to NotaryFinder',
+      body: 'Get documents notarized without the hassle. Here’s a 10-second tour.' },
+    { sel: '[data-tour="cust-post"]', title: 'Post a Job',
+      body: 'Start here when you need a notary. Describe the job and set your max price.' },
+    { sel: '[data-tour="cust-results"]', title: 'Notaries compete',
+      body: 'Verified notaries bid on your job — you pick the lowest price or best rating.' },
+    { sel: '[data-tour="cust-myjobs"]', title: 'My Jobs',
+      body: 'Track and manage your jobs, message your notary, and leave reviews here.' }
+  ],
+  notary: [
+    { sel: null, title: 'Welcome to NotaryFinder',
+      body: 'Win more notary work. Here’s a quick tour of your dashboard.' },
+    { sel: '[data-tour="not-stats"]', title: 'Your stats',
+      body: 'Track active bids, jobs won, weekly earnings, and your rating at a glance.' },
+    { sel: '[data-tour="not-jobs"]', title: 'Available jobs',
+      body: 'Jobs near you, closest first. Place a bid under the customer’s max to compete.' },
+    { sel: '[data-tour="not-mybids"]', title: 'My Bids',
+      body: 'Follow your bids, message customers on won jobs, and manage your schedule.' }
+  ]
+};
+
+function _tourKey(role) { return role === 'notary' ? 'tourSeenNotary' : 'tourSeen'; }
+
+function maybeStartTour(role) {
+  try { if (localStorage.getItem(_tourKey(role))) return; } catch { return; }
+  if (document.getElementById('tour-root').style.display === 'block') return;
+  _tourRole = role;
+  _tourIdx = 0;
+  document.getElementById('tour-root').style.display = 'block';
+  renderTourStep();
+  window.addEventListener('resize', renderTourStep);
+}
+
+function tourNext() {
+  if (_tourIdx >= TOUR_STEPS[_tourRole].length - 1) { endTour(); return; }
+  _tourIdx++;
+  renderTourStep();
+}
+
+function endTour() {
+  try { localStorage.setItem(_tourKey(_tourRole), '1'); } catch {}
+  document.getElementById('tour-root').style.display = 'none';
+  window.removeEventListener('resize', renderTourStep);
+}
+
+function renderTourStep() {
+  const steps = TOUR_STEPS[_tourRole];
+  const step = steps[_tourIdx];
+  const isLast = _tourIdx === steps.length - 1;
+
+  document.getElementById('tour-step-label').textContent =
+    `Step ${_tourIdx + 1} of ${steps.length}`;
+  document.getElementById('tour-title').textContent = step.title;
+  document.getElementById('tour-body').textContent = step.body;
+  document.querySelector('.tour-next').textContent = isLast ? 'Got it' : 'Next';
+
+  const screen = document.querySelector('.screen');
+  const sRect = screen.getBoundingClientRect();
+  const spot = document.getElementById('tour-spotlight');
+  const card = document.getElementById('tour-card');
+
+  const target = step.sel ? document.querySelector(step.sel) : null;
+  if (target && target.offsetParent !== null) {
+    const r = target.getBoundingClientRect();
+    const pad = 6;
+    const top = r.top - sRect.top - pad;
+    const left = r.left - sRect.left - pad;
+    const w = r.width + pad * 2;
+    const h = r.height + pad * 2;
+    spot.style.top = top + 'px';
+    spot.style.left = left + 'px';
+    spot.style.width = w + 'px';
+    spot.style.height = h + 'px';
+
+    // Place card below the target if there's room, else above.
+    const cardH = 150;
+    let cardTop = top + h + 10;
+    if (cardTop + cardH > sRect.height) cardTop = Math.max(8, top - cardH - 4);
+    let cardLeft = left;
+    if (cardLeft + 226 > sRect.width) cardLeft = sRect.width - 226 - 8;
+    card.style.top = cardTop + 'px';
+    card.style.left = Math.max(8, cardLeft) + 'px';
+  } else {
+    // Centered welcome card, no spotlight.
+    spot.style.width = '0px';
+    spot.style.height = '0px';
+    spot.style.top = (sRect.height / 2) + 'px';
+    spot.style.left = (sRect.width / 2) + 'px';
+    card.style.top = (sRect.height / 2 - 75) + 'px';
+    card.style.left = (sRect.width / 2 - 113) + 'px';
+  }
+}
+
+/* ================================================================
    SUPABASE REALTIME — live bid/job updates
    ================================================================ */
 const sbRealtime = (() => {
@@ -5553,6 +5698,9 @@ document.addEventListener('click', e => {
     btn.classList.toggle('on', btn.dataset.mode === 'customer');
   });
   goTo('home');
+
+  // First-time customer onboarding tour (after layout settles).
+  setTimeout(() => maybeStartTour('customer'), 600);
 
   // Hydrate from Supabase in the background — doesn't block the UI.
   // On success, re-render whatever page is currently active.
