@@ -2933,6 +2933,7 @@ function renderConfirmedCard(bid, job) {
           : ''}
         <button class="btn btn-primary btn-sm" onclick="toast('Calling ${bid.notaryName}…')">Call notary</button>
         <button class="btn btn-secondary btn-sm" onclick="openJobMessages('${job.id}')">Message</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadJobIcs('${job.id}')">Add to Calendar</button>
         ${job.signedDocumentFilePath
           ? `<button class="btn btn-ghost btn-sm" onclick="openSignedUrl('job-documents','${job.signedDocumentFilePath}')">Download signed doc</button>`
           : ''}
@@ -3408,6 +3409,7 @@ function renderMyBidsList() {
         ${b.status === 'accepted' && job
           ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);display:flex;gap:8px;">
                <button class="btn btn-secondary btn-sm" onclick="openJobMessages('${job.id}')">Message customer</button>
+               <button class="btn btn-ghost btn-sm" onclick="downloadJobIcs('${job.id}')">Add to Calendar</button>
              </div>`
           : ''}
       </div>
@@ -4579,6 +4581,77 @@ async function sendJobMessage(e) {
     }
   }
   return false;
+}
+
+/* ================================================================
+   CALENDAR EXPORT — generate & download an .ics for an accepted job
+   Pure client-side (Blob + object URL). Works online and offline.
+   ================================================================ */
+function _icsDate(d) {
+  // → YYYYMMDDTHHMMSSZ (UTC)
+  return d.getUTCFullYear()
+    + String(d.getUTCMonth() + 1).padStart(2, '0')
+    + String(d.getUTCDate()).padStart(2, '0') + 'T'
+    + String(d.getUTCHours()).padStart(2, '0')
+    + String(d.getUTCMinutes()).padStart(2, '0')
+    + String(d.getUTCSeconds()).padStart(2, '0') + 'Z';
+}
+
+function _icsEscape(s) {
+  return String(s || '')
+    .replace(/\\/g, '\\\\').replace(/;/g, '\\;')
+    .replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+}
+
+function downloadJobIcs(jobId) {
+  const job = STATE.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  const acceptedBid = job.acceptedBidId
+    ? STATE.bids.find(b => b.id === job.acceptedBidId) : null;
+
+  const iAmNotary = STATE.currentMode === 'notary';
+  const otherName = iAmNotary
+    ? (job.customerName || 'Customer')
+    : (acceptedBid ? acceptedBid.notaryName : 'Notary');
+  const contact = iAmNotary
+    ? (job.customerEmail || '')
+    : (acceptedBid ? notaryPhone(acceptedBid.notaryId) : '');
+
+  const start = job.dateTime ? new Date(job.dateTime) : new Date();
+  const end = new Date(start.getTime() + 30 * 60 * 1000); // default 30 min
+
+  const descParts = [];
+  if (job.notes) descParts.push(job.notes);
+  if (acceptedBid) descParts.push('Agreed price: $' + acceptedBid.price);
+  if (contact) descParts.push('Contact: ' + contact);
+
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//NotaryFinder//EN',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    'UID:' + jobId + '@notaryfinder',
+    'DTSTAMP:' + _icsDate(new Date()),
+    'DTSTART:' + _icsDate(start),
+    'DTEND:' + _icsDate(end),
+    'SUMMARY:' + _icsEscape('Notary: ' + jobServiceLabel(job) + ' for ' + otherName),
+    'LOCATION:' + _icsEscape(job.location || ''),
+    'DESCRIPTION:' + _icsEscape(descParts.join('\n')),
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ];
+
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'notary-job-' + jobId.slice(0, 8) + '.ics';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('Calendar event downloaded');
 }
 
 /* ================================================================
