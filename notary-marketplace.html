@@ -663,6 +663,18 @@
   .jfil-clear { font-size: 9px; color: #666; text-decoration: underline; cursor: pointer; }
   .jfil-clear:hover { color: #000; }
 
+  /* My Jobs — tabs + past job cards */
+  .myjobs-tabs { margin-bottom: 14px; }
+  .past-job-card { margin-bottom: 10px; padding: 13px 14px; }
+  .past-job-row { display: flex; justify-content: space-between; gap: 10px; }
+  .past-job-title { font-size: 12px; font-weight: 600; color: #111; }
+  .past-job-meta { font-size: 9px; color: #888; margin-top: 3px; }
+  .past-job-right { text-align: right; flex-shrink: 0; }
+  .past-job-price { font-size: 14px; font-weight: 700; color: #111; }
+  .past-job-date { font-size: 8.5px; color: #aaa; margin-top: 2px; }
+  .past-job-foot { margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+  .mybid-status.status-confirmed { color: #1d7a4d; }
+
   /* ============================================================
      MY BIDS (#my-bids)
      ============================================================ */
@@ -2883,19 +2895,41 @@ function renderMyJob(opts = {}) {
     return;
   }
 
-  const job = findUserJob();
+  const tab = STATE.myJobsTab || 'active';
+  const userJobs = STATE.jobs.filter(j => j.isUserJob);
+  const activeJobs = userJobs.filter(j => j.status === 'open' || j.status === 'accepted');
+  const pastJobs = userJobs
+    .filter(j => j.status === 'completed' || j.status === 'cancelled')
+    .sort((a, b) => b.postedAt - a.postedAt);
+
+  const statsHTML = (typeof renderCustomerStats === 'function') ? renderCustomerStats() : '';
+  const tabBar = `
+    <div class="tabs myjobs-tabs">
+      <button class="tab-btn ${tab === 'active' ? 'active' : ''}" onclick="setMyJobsTab('active')">Active <span class="badge">${activeJobs.length}</span></button>
+      <button class="tab-btn ${tab === 'past' ? 'active' : ''}" onclick="setMyJobsTab('past')">Past <span class="badge">${pastJobs.length}</span></button>
+    </div>`;
+
+  if (tab === 'past') {
+    root.innerHTML = statsHTML + tabBar + renderPastJobsList(pastJobs);
+    if (typeof animateCustomerStats === 'function') animateCustomerStats();
+    return;
+  }
+
+  // Active tab — detailed view of the most recent active job.
+  const job = activeJobs.sort((a, b) => b.postedAt - a.postedAt)[0] || null;
 
   if (!job) {
-    root.innerHTML = `
+    root.innerHTML = statsHTML + tabBar + `
       <div class="empty-state">
         <div class="es-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0e0e0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></div>
-        <div class="es-title">You haven't posted a job yet</div>
+        <div class="es-title">No active jobs</div>
         <div class="es-sub">Post a job and verified notaries near you will start bidding within minutes.</div>
         <div style="margin-top:14px;">
           <button class="btn btn-primary btn-sm" onclick="goTo('post-job')">Post a Job</button>
         </div>
       </div>
     `;
+    if (typeof animateCustomerStats === 'function') animateCustomerStats();
     return;
   }
 
@@ -2966,7 +3000,78 @@ function renderMyJob(opts = {}) {
       ? renderConfirmedCard(acceptedBid, job)
       : renderLiveBids(bids, job, opts.newBidId || null);
 
-  root.innerHTML = statusBanner + summaryHTML + bidsSection;
+  root.innerHTML = statsHTML + tabBar + statusBanner + summaryHTML + bidsSection;
+  if (typeof animateCustomerStats === 'function') animateCustomerStats();
+}
+
+function setMyJobsTab(tab) {
+  STATE.myJobsTab = tab;
+  saveState();
+  renderMyJob();
+}
+
+function renderPastJobsList(pastJobs) {
+  if (!pastJobs.length) {
+    return `
+      <div class="empty-state">
+        <div class="es-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0e0e0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></div>
+        <div class="es-title">No past jobs yet</div>
+        <div class="es-sub">Completed and cancelled jobs will appear here.</div>
+      </div>`;
+  }
+  return pastJobs.map(job => {
+    const acceptedBid = job.acceptedBidId ? STATE.bids.find(b => b.id === job.acceptedBidId) : null;
+    const isCancelled = job.status === 'cancelled';
+    const outcome = isCancelled
+      ? 'Cancelled'
+      : `Completed${acceptedBid ? ' by ' + escapeHTML(acceptedBid.notaryName) : ''}`;
+    const finalPrice = acceptedBid ? acceptedBid.price : job.startingPrice;
+    const outcomeCls = isCancelled ? 'status-cancelled' : 'status-confirmed';
+    return `
+      <div class="card past-job-card">
+        <div class="past-job-row">
+          <div class="past-job-info">
+            <div class="past-job-title">${jobServiceLabel(job)}</div>
+            <div class="past-job-meta">${escapeHTML(job.location || '')} · ${formatDateTime(job.dateTime)}</div>
+            <div class="mybid-status ${outcomeCls}" style="margin-top:6px;display:inline-block;">${outcome}</div>
+          </div>
+          <div class="past-job-right">
+            <div class="past-job-price">$${finalPrice}</div>
+            <div class="past-job-date">${formatTimeAgo(job.postedAt)}</div>
+          </div>
+        </div>
+        <div class="past-job-foot">
+          <button class="btn btn-secondary btn-sm" onclick="rebookJob('${job.id}')">Book again</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* Rebook — prefill the post-job flow from a past job, except price. */
+function rebookJob(jobId) {
+  const job = STATE.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  goTo('post-job'); // resets the form first
+  // Repopulate after reset.
+  selectedServices = new Set(jobServices(job));
+  $servicesGrid.querySelectorAll('.svc-pill').forEach(p => {
+    p.classList.toggle('on', selectedServices.has(p.dataset.svc));
+  });
+  updateServicesCount();
+  if ($signatures) $signatures.value = job.signatures || 1;
+  if (job.notaryPreference) {
+    currentPref = job.notaryPreference;
+    $prefGroup.querySelectorAll('.radio-pill').forEach(p => {
+      p.classList.toggle('on', p.dataset.val === currentPref);
+    });
+  }
+  if ($location) $location.value = job.location || '';
+  if ($datetime && job.dateTime) $datetime.value = job.dateTime;
+  if ($notes) $notes.value = job.notes || '';
+  // Price intentionally left at the suggested default.
+  userTouchedPrice = false;
+  updateSuggested();
+  toast('Job details prefilled — review and post');
 }
 
 function renderLiveBids(bids, job, newBidId = null) {
