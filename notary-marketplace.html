@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>NotaryFinder — Marketplace</title>
+<title>NotaryFinder by Print N' Parcel</title>
+<meta name="description" content="NotaryFinder by Print N' Parcel — post a notary job and verified mobile notaries near you bid in minutes. Operated from Fremont, CA.">
+<meta property="og:title" content="NotaryFinder by Print N' Parcel">
+<meta property="og:description" content="Post a notary job and verified notaries near you bid in minutes. A Print N' Parcel service in Fremont, CA.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='32' fill='%23111'/%3E%3Ctext x='32' y='42' font-family='Arial,sans-serif' font-size='28' font-weight='700' fill='%23fff' text-anchor='middle'%3ENF%3C/text%3E%3C/svg%3E">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap');
 
@@ -93,6 +97,17 @@
     padding-top: 38px;
   }
   .page.active { opacity: 1; pointer-events: all; transform: translateX(0); }
+  .page { padding-bottom: 26px; }
+
+  /* Global Print N' Parcel footer — pinned to bottom of every screen */
+  .global-footer {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    z-index: 60; padding: 5px 12px;
+    font-family: 'DM Sans', sans-serif; font-size: 10px; color: #999;
+    text-align: center; background: rgba(255,255,255,.94);
+    border-top: 1px solid var(--line-soft); pointer-events: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .page::-webkit-scrollbar { width: 4px; }
   .page::-webkit-scrollbar-thumb { background: #e0e0e0; border-radius: 2px; }
 
@@ -1341,6 +1356,7 @@
         <button class="nav-btn active" onclick="goTo('home')">Home</button>
         <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
+        <button class="nav-btn" onclick="openAbout()">About</button>
       </nav>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle" id="mode-toggle">
@@ -2037,6 +2053,29 @@
     </div>
   </div>
 
+  <!-- About modal — Print N' Parcel branding -->
+  <div class="overlay" id="about-overlay">
+    <div class="modal" style="max-width:340px;width:340px;">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title">About NotaryFinder</div>
+          <div class="modal-sub">A Print N' Parcel service</div>
+        </div>
+        <button class="modal-close" onclick="closeAbout()" aria-label="Close">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:10px;color:#555;line-height:1.7;margin:0 0 10px;">NotaryFinder is operated by Print N' Parcel, a Fremont, CA shipping and notary services business. We connect customers with verified mobile notaries who bid on your job so you get a fair price, fast.</p>
+        <p style="font-size:10px;color:#555;line-height:1.7;margin:0;">Print N' Parcel · 3654 Thornton Ave, Fremont, CA 94536 · hello@printnparcel.com · (510) 555-0100</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" style="width:100%;" onclick="closeAbout()">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global footer — Print N' Parcel branding, shown on every screen -->
+  <div class="global-footer" id="global-footer">Operated by Print N' Parcel · 3654 Thornton Ave, Fremont, CA 94536 · hello@printnparcel.com · (510) 555-0100</div>
+
   <!-- Mobile nav drawer — toggled by hamburger on small screens -->
   <div class="nav-drawer-backdrop" id="nav-drawer-backdrop" onclick="closeNavDrawer()"></div>
   <div class="nav-drawer" id="nav-drawer">
@@ -2049,6 +2088,12 @@
 </div>
 
 <script>
+/* ================================================================
+   ABOUT MODAL — Print N' Parcel branding
+   ================================================================ */
+function openAbout() { document.getElementById('about-overlay')?.classList.add('open'); }
+function closeAbout() { document.getElementById('about-overlay')?.classList.remove('open'); }
+
 /* ================================================================
    MOBILE NAV DRAWER
    ================================================================ */
