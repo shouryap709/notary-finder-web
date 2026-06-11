@@ -2644,7 +2644,93 @@ function goTo(pageId) {
       sbRealtime.subscribeToOpenJobs();
     }
   }
+
+  syncHash(pageId);
 }
+
+/* ================================================================
+   HASH ROUTING — keep the URL in sync with the active page so the
+   browser back/forward buttons work naturally.
+   ================================================================ */
+const PAGE_TO_HASH = {
+  'home': '#/',
+  'post-job': '#/post',
+  'my-job': '#/my-jobs',
+  'notary-login': '#/notary',
+  'notary-dashboard': '#/notary/dashboard',
+  'my-bids': '#/notary/bids'
+};
+let suppressHashSync = false;
+
+function syncHash(pageId) {
+  if (suppressHashSync) return;
+  const hash = PAGE_TO_HASH[pageId];
+  if (hash && window.location.hash !== hash) {
+    history.pushState(null, '', hash);
+  }
+}
+
+function ensureNotaryMode() {
+  if (STATE.currentMode !== 'notary') {
+    STATE.currentMode = 'notary';
+    saveState();
+    document.querySelectorAll('.mode-toggle button').forEach(btn => {
+      btn.classList.toggle('on', btn.dataset.mode === 'notary');
+    });
+  }
+}
+function ensureCustomerMode() {
+  if (STATE.currentMode !== 'customer') {
+    STATE.currentMode = 'customer';
+    saveState();
+    document.querySelectorAll('.mode-toggle button').forEach(btn => {
+      btn.classList.toggle('on', btn.dataset.mode === 'customer');
+    });
+  }
+}
+
+function router() {
+  const raw = window.location.hash || '#/';
+  const parts = raw.replace(/^#\/?/, '').split('/').filter(Boolean);
+  suppressHashSync = true;
+  try {
+    if (parts.length === 0) {
+      goTo('home');
+    } else if (parts[0] === 'post') {
+      ensureCustomerMode(); goTo('post-job');
+    } else if (parts[0] === 'my-jobs') {
+      ensureCustomerMode(); goTo('my-job');
+    } else if (parts[0] === 'job' && parts[1]) {
+      // Job detail — show the relevant view, then surface the job.
+      if (STATE.currentMode === 'notary') {
+        goTo('notary-dashboard');
+        if (STATE.jobs.some(j => j.id === parts[1])) openBidModal(parts[1]);
+      } else {
+        goTo('my-job');
+      }
+    } else if (parts[0] === 'notary') {
+      if (parts[1] === 'dashboard') {
+        ensureNotaryMode(); goTo('notary-dashboard');
+      } else if (parts[1] === 'bids') {
+        ensureNotaryMode(); goTo('my-bids');
+      } else if (parts[1]) {
+        // #/notary/:id — open a notary's public profile over the current page.
+        goTo(STATE.currentMode === 'notary' ? 'notary-dashboard' : 'home');
+        openNotaryProfile(parts[1]);
+      } else {
+        ensureNotaryMode();
+        goTo(notarySession ? 'notary-dashboard' : 'notary-login');
+      }
+    } else {
+      goTo('home');
+    }
+  } finally {
+    suppressHashSync = false;
+  }
+}
+
+window.addEventListener('hashchange', router);
+window.addEventListener('popstate', router);
 
 /* ================================================================
    Mode toggle (Customer / Notary)
@@ -5783,6 +5869,11 @@ document.addEventListener('click', e => {
     btn.classList.toggle('on', btn.dataset.mode === 'customer');
   });
   goTo('home');
+
+  // Honor a deep-linked hash on initial load (browser back/forward handled by router()).
+  if (window.location.hash && window.location.hash !== '#/') {
+    router();
+  }
 
   // Hydrate from Supabase in the background — skeletons shown on dynamic pages until done.
   if (sb) {
