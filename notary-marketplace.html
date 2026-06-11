@@ -1231,6 +1231,49 @@
     .nav-drawer,
     .nav-drawer-backdrop { display: none !important; }
   }
+
+  /* ============================================================
+     MOBILE REFINEMENTS — split phone portrait vs landscape.
+     Appended block; does not touch the rules above.
+     ============================================================ */
+  @media (max-width: 768px) {
+    /* Maps shrink on every handset size */
+    #jf-map, #nl-home-map { height: 160px !important; }
+  }
+
+  /* Phone portrait — simplify header to logo only, full-screen modals */
+  @media (max-width: 480px) {
+    .header .mode-toggle,
+    .header .notif-bell { display: none !important; }
+    .header { gap: 8px; }
+    .logo { font-size: 13px; }
+
+    .hero-wrap h1 { font-size: 21px; }
+    .service-grid { grid-template-columns: repeat(2, 1fr); }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+
+    /* Modals take the whole screen with a back arrow */
+    .overlay.open .modal {
+      width: 100% !important;
+      max-width: 100% !important;
+      height: 100% !important;
+      max-height: 100% !important;
+      border-radius: 0 !important;
+      transform: none !important;
+    }
+    .modal-close::before {
+      content: '\2190';
+      font-size: 18px;
+    }
+    .modal-close { font-size: 0; }
+  }
+
+  /* Phone landscape / small tablet — keep two-up grids, full-width CTAs */
+  @media (min-width: 481px) and (max-width: 768px) {
+    .service-grid { grid-template-columns: repeat(3, 1fr); }
+    .hero-ctas { flex-direction: row; flex-wrap: wrap; }
+    .btn-block { flex: 1 1 45%; }
+  }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
