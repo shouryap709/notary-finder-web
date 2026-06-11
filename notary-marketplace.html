@@ -108,6 +108,23 @@
     border-top: 1px solid var(--line-soft); pointer-events: none;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  .kbd-hint {
+    position: absolute; right: 8px; bottom: 22px; z-index: 61;
+    font-family: 'DM Sans', sans-serif; font-size: 10px; color: #999;
+    background: none; border: none; cursor: pointer; padding: 2px 4px;
+  }
+  .kbd-hint:hover { color: #444; }
+  .kbd-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 0; border-bottom: 1px solid var(--line-soft);
+    font-size: 11px; color: #444;
+  }
+  .kbd-row:last-child { border-bottom: none; }
+  .kbd-row kbd {
+    font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 600;
+    min-width: 30px; text-align: center; padding: 3px 7px;
+    background: #f5f5f5; border: 1px solid var(--line); border-radius: 5px; color: #222;
+  }
   .page::-webkit-scrollbar { width: 4px; }
   .page::-webkit-scrollbar-thumb { background: #e0e0e0; border-radius: 2px; }
 
@@ -2073,8 +2090,33 @@
     </div>
   </div>
 
+  <!-- Keyboard shortcuts help modal -->
+  <div class="overlay" id="shortcuts-overlay">
+    <div class="modal" style="max-width:320px;width:320px;">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title">Keyboard shortcuts</div>
+          <div class="modal-sub">Work faster with your keyboard</div>
+        </div>
+        <button class="modal-close" onclick="closeShortcuts()" aria-label="Close">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div class="kbd-row"><kbd>/</kbd><span>Focus search</span></div>
+        <div class="kbd-row"><kbd>n</kbd><span>New job (customer)</span></div>
+        <div class="kbd-row"><kbd>j</kbd><span>My Jobs (customer)</span></div>
+        <div class="kbd-row"><kbd>b</kbd><span>My Bids (notary)</span></div>
+        <div class="kbd-row"><kbd>Esc</kbd><span>Close modal / go back</span></div>
+        <div class="kbd-row"><kbd>?</kbd><span>Show this help</span></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" style="width:100%;" onclick="closeShortcuts()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Global footer — Print N' Parcel branding, shown on every screen -->
   <div class="global-footer" id="global-footer">Operated by Print N' Parcel · 3654 Thornton Ave, Fremont, CA 94536 · hello@printnparcel.com · (510) 555-0100</div>
+  <button class="kbd-hint" id="kbd-hint" onclick="openShortcuts()" aria-label="Keyboard shortcuts">Press ? for shortcuts</button>
 
   <!-- Mobile nav drawer — toggled by hamburger on small screens -->
   <div class="nav-drawer-backdrop" id="nav-drawer-backdrop" onclick="closeNavDrawer()"></div>
@@ -2093,6 +2135,58 @@
    ================================================================ */
 function openAbout() { document.getElementById('about-overlay')?.classList.add('open'); }
 function closeAbout() { document.getElementById('about-overlay')?.classList.remove('open'); }
+
+/* ================================================================
+   KEYBOARD SHORTCUTS
+   ================================================================ */
+function openShortcuts() { document.getElementById('shortcuts-overlay')?.classList.add('open'); }
+function closeShortcuts() { document.getElementById('shortcuts-overlay')?.classList.remove('open'); }
+
+// Close the topmost open overlay; return true if one was closed.
+function closeTopOverlay() {
+  const open = [...document.querySelectorAll('.overlay.open')];
+  if (open.length) { open[open.length - 1].classList.remove('open'); return true; }
+  const notif = document.getElementById('notif-panel');
+  if (notif && notif.classList.contains('open')) { closeNotifPanel(); return true; }
+  const drawer = document.getElementById('nav-drawer');
+  if (drawer && drawer.classList.contains('open')) { closeNavDrawer(); return true; }
+  return false;
+}
+
+document.addEventListener('keydown', e => {
+  // Esc works even while typing (to blur / close).
+  if (e.key === 'Escape') {
+    if (closeTopOverlay()) { e.preventDefault(); return; }
+    const active = document.querySelector('.page.active')?.id;
+    if (active && active !== 'home') { goTo(STATE.currentMode === 'notary' ? 'notary-dashboard' : 'home'); }
+    return;
+  }
+  // All other shortcuts skip when typing in a field.
+  const t = e.target;
+  const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+  if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+
+  switch (e.key) {
+    case '/': {
+      e.preventDefault();
+      const search = document.getElementById('jfil-search');
+      if (search && search.offsetParent !== null) search.focus();
+      break;
+    }
+    case 'n':
+      if (STATE.currentMode !== 'notary') { e.preventDefault(); goTo('post-job'); }
+      break;
+    case 'j':
+      if (STATE.currentMode !== 'notary') { e.preventDefault(); goTo('my-job'); }
+      break;
+    case 'b':
+      if (STATE.currentMode === 'notary') { e.preventDefault(); goTo('my-bids'); }
+      break;
+    case '?':
+      e.preventDefault(); openShortcuts();
+      break;
+  }
+});
 
 /* ================================================================
    MOBILE NAV DRAWER
