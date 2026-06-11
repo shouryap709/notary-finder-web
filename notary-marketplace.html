@@ -38,7 +38,72 @@
     --radius-sm: 5px;
     --radius: 9px;
     --radius-lg: 13px;
+
+    /* Semantic theme aliases (used by the dark-mode toggle) */
+    --bg: #fff;
+    --fg: #222;
+    --muted: #777;
+    --accent: #000;
   }
+
+  /* ============================================================
+     Dark theme — remaps every design token; var()-based styles
+     flip automatically, with targeted overrides for the few
+     literal-coloured surfaces below.
+     ============================================================ */
+  :root[data-theme="dark"] {
+    --ink:        #f5f5f5;
+    --ink-soft:   #dcdcdc;
+    --text:       #f0f0f0;
+    --text-muted: #888;
+    --text-faint: #6f6f6f;
+    --text-ghost: #555;
+    --line:       #333;
+    --line-soft:  #2a2a2a;
+    --border:     #333;
+    --surface:      #242424;
+    --surface-soft: #1e1e1e;
+    --surface-mute: #2d2d2d;
+    --bg:     #1a1a1a;
+    --fg:     #f5f5f5;
+    --muted:  #888;
+    --accent: #f5f5f5;
+  }
+
+  /* Dark overrides for selectors that still use colour literals */
+  :root[data-theme="dark"] .screen { color: var(--fg); }
+  :root[data-theme="dark"] .pm-stat,
+  :root[data-theme="dark"] .modal-summary { background: var(--surface-soft); border-color: var(--border); }
+  :root[data-theme="dark"] .pm-stat-val,
+  :root[data-theme="dark"] .np-head-title,
+  :root[data-theme="dark"] .modal-title,
+  :root[data-theme="dark"] .modal-summary-row .val { color: var(--fg); }
+  :root[data-theme="dark"] .np-head,
+  :root[data-theme="dark"] .np-item { border-color: var(--line); }
+  :root[data-theme="dark"] .np-item:hover,
+  :root[data-theme="dark"] .np-acts button:hover { background: var(--surface-mute); }
+  :root[data-theme="dark"] .np-item.unread { background: #1e2b3a; }
+  :root[data-theme="dark"] .np-item.unread:hover { background: #243245; }
+  :root[data-theme="dark"] .sk-block { background: linear-gradient(90deg,#2a2a2a 25%,#333 50%,#2a2a2a 75%); background-size: 200% 100%; }
+  :root[data-theme="dark"] .notary-pill:hover { background: var(--surface-mute); color: var(--fg); }
+  :root[data-theme="dark"] .menu-btn:hover,
+  :root[data-theme="dark"] .notif-bell:hover { background: var(--surface-mute); }
+  :root[data-theme="dark"] .logo { color: var(--fg); }
+
+  /* Smooth 200ms transition when toggling theme (containers only) */
+  .screen, .header, .page, .card, .modal, #notif-panel,
+  .field-input, .field-select, .field-textarea, .job-card, .bid-card {
+    transition: background-color .2s ease, color .2s ease, border-color .2s ease;
+  }
+
+  /* Theme toggle button in header */
+  .theme-toggle {
+    width: 28px; height: 28px; border: none; background: none;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; color: var(--text-muted); flex-shrink: 0;
+    border-radius: 4px; transition: background .15s, color .15s;
+  }
+  .theme-toggle:hover { background: var(--surface-mute); color: var(--ink); }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -70,7 +135,7 @@
   .screen {
     width: 100%;
     height: 600px;
-    background: #fff;
+    background: var(--bg);
     border-radius: 6px 6px 0 0;
     overflow: hidden;
     position: relative;
@@ -109,7 +174,7 @@
      ============================================================ */
   .header {
     position: absolute; top: 0; left: 0; right: 0; height: 38px;
-    background: #fff;
+    background: var(--surface);
     border-bottom: 1px solid var(--line);
     display: flex; align-items: center;
     padding: 0 18px; gap: 14px; z-index: 100;
@@ -174,18 +239,18 @@
     padding: 10px 18px; letter-spacing: .1px;
     transition: background .16s, transform .12s, box-shadow .16s, border-color .15s;
   }
-  .btn-primary { background: #000; color: #fff; }
-  .btn-primary:hover { background: #222; }
-  .btn-primary:disabled { background: #ccc; cursor: default; }
+  .btn-primary { background: var(--ink); color: var(--surface); }
+  .btn-primary:hover { background: var(--ink-soft); }
+  .btn-primary:disabled { background: var(--text-ghost); cursor: default; }
   .btn-secondary {
-    background: #fff; color: #000; border: 1px solid #ddd;
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
   }
-  .btn-secondary:hover { border-color: #000; }
+  .btn-secondary:hover { border-color: var(--ink); }
   .btn-ghost {
-    background: none; color: #888; padding: 6px 10px;
+    background: none; color: var(--text-muted); padding: 6px 10px;
     font-size: 10px; font-weight: 500;
   }
-  .btn-ghost:hover { color: #000; }
+  .btn-ghost:hover { color: var(--ink); }
   .btn-sm {
     padding: 6px 12px; font-size: 9.5px; font-weight: 600; border-radius: 6px;
   }
@@ -194,7 +259,7 @@
      Reusable: card
      ============================================================ */
   .card {
-    background: #fff; border: 1px solid var(--border);
+    background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 14px;
   }
 
@@ -204,23 +269,23 @@
   .field { margin-bottom: 14px; }
   .field-label {
     display: block; font-size: 9px; font-weight: 600;
-    color: #888; text-transform: uppercase; letter-spacing: .55px;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: .55px;
     margin-bottom: 6px;
   }
   .field-input,
   .field-select,
   .field-textarea {
     width: 100%; font-family: 'DM Sans',sans-serif;
-    font-size: 11px; color: #000;
-    padding: 9px 12px; background: #fafafa;
-    border: 1px solid #e2e2e2; border-radius: 7px;
+    font-size: 11px; color: var(--text);
+    padding: 9px 12px; background: var(--surface-soft);
+    border: 1px solid var(--border); border-radius: 7px;
     outline: none; transition: border-color .15s, background .15s;
   }
   .field-input:focus,
   .field-select:focus,
-  .field-textarea:focus { border-color: #000; background: #fff; }
+  .field-textarea:focus { border-color: var(--ink); background: var(--surface); }
   .field-textarea { resize: vertical; min-height: 60px; line-height: 1.5; }
-  .field-input::placeholder, .field-textarea::placeholder { color: #ccc; }
+  .field-input::placeholder, .field-textarea::placeholder { color: var(--text-ghost); }
   .field-error {
     font-size: 8.5px; color: var(--accent-red); margin-top: 4px;
     display: none; letter-spacing: .1px;
@@ -728,8 +793,8 @@
 
   .modal {
     width: 380px; max-height: 520px;
-    background: #fff; border-radius: 13px;
-    border: 1px solid #e4e4e4;
+    background: var(--surface); border-radius: 13px;
+    border: 1px solid var(--border);
     box-shadow: 0 16px 52px rgba(0,0,0,.18);
     display: flex; flex-direction: column;
     transform: translateY(10px) scale(.97);
@@ -1044,7 +1109,7 @@
   .notif-badge.visible { display: block; }
   #notif-panel {
     position: absolute; top: 40px; right: 8px;
-    width: 272px; background: #fff; border: 1px solid #e8e8e8;
+    width: 272px; background: var(--surface); border: 1px solid var(--border);
     border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
     z-index: 9999; overflow: hidden; display: none;
   }
@@ -1286,6 +1351,7 @@
         <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
       </nav>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode"></button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle" id="mode-toggle">
         <button data-mode="customer" class="on">Customer</button>
@@ -1343,6 +1409,7 @@
         <button class="nav-btn active" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
       </nav>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode"></button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer" class="on">Customer</button>
@@ -1590,6 +1657,7 @@
         <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn active" onclick="goTo('my-job')">My Jobs</button>
       </nav>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode"></button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer" class="on">Customer</button>
@@ -1614,6 +1682,7 @@
         <button class="nav-btn" onclick="goTo('my-bids')">My Bids</button>
       </nav>
       <button class="notary-pill" id="notary-pill-dashboard" onclick="signOutNotary()"></button>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode"></button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer">Customer</button>
@@ -1673,6 +1742,7 @@
         <button class="nav-btn active" onclick="goTo('my-bids')">My Bids</button>
       </nav>
       <button class="notary-pill" id="notary-pill-bids" onclick="signOutNotary()"></button>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode"></button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer">Customer</button>
@@ -1706,6 +1776,7 @@
       <nav class="nav" data-mode-nav="notary">
         <button class="nav-btn active">Sign In</button>
       </nav>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode"></button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer">Customer</button>
@@ -4830,6 +4901,34 @@ async function pwaInstall() {
   try { await _deferredInstallPrompt.userChoice; } catch {}
   _deferredInstallPrompt = null;
 }
+
+/* ================================================================
+   DARK MODE — theme toggle, persisted to localStorage
+   ================================================================ */
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  // Sun when dark (tap to go light), moon when light.
+  const icon = theme === 'dark' ? '☀️' : '🌙';
+  document.querySelectorAll('.theme-toggle').forEach(b => { b.textContent = icon; });
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'dark' ? '#1a1a1a' : '#000000');
+}
+
+function toggleTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem('theme', next); } catch {}
+  applyTheme(next);
+}
+
+(function initTheme() {
+  let theme;
+  try { theme = localStorage.getItem('theme'); } catch {}
+  if (!theme) {
+    theme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      ? 'dark' : 'light';
+  }
+  applyTheme(theme);
+})();
 
 /* ================================================================
    SUPABASE REALTIME — live bid/job updates
