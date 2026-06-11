@@ -643,6 +643,26 @@
   .empty-state .es-title { font-size: 11px; color: #555; font-weight: 500; margin-bottom: 4px; }
   .empty-state .es-sub { font-size: 9px; color: #aaa; }
 
+  /* Job filter bar (notary dashboard) */
+  .job-filter-bar {
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; margin-bottom: 14px;
+    display: flex; flex-direction: column; gap: 7px; background: #fcfcfc;
+  }
+  .job-filter-bar .jfil-row { display: flex; gap: 7px; }
+  .jfil-input {
+    flex: 1; width: 100%; box-sizing: border-box;
+    font-family: 'DM Sans', sans-serif; font-size: 10px;
+    padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px;
+    background: #fff; color: #222;
+  }
+  .jfil-input:focus { outline: none; border-color: #bbb; }
+  .jfil-input::placeholder { color: #bbb; }
+  .jfil-foot { display: flex; align-items: center; justify-content: space-between; min-height: 14px; }
+  .jfil-count { font-size: 9px; color: #888; }
+  .jfil-clear { font-size: 9px; color: #666; text-decoration: underline; cursor: pointer; }
+  .jfil-clear:hover { color: #000; }
+
   /* ============================================================
      MY BIDS (#my-bids)
      ============================================================ */
@@ -1676,6 +1696,40 @@
       </div>
 
       <div class="section-label">Available jobs <span class="count" id="dash-job-count"></span></div>
+
+      <div class="job-filter-bar" id="job-filter-bar">
+        <input type="text" id="jfil-search" class="jfil-input jfil-search" placeholder="Search service, location, notes…" aria-label="Search jobs" oninput="onFilterChange()">
+        <div class="jfil-row">
+          <select id="jfil-service" class="jfil-input" aria-label="Service type" onchange="onFilterChange()">
+            <option value="">All services</option>
+            <option>Mobile Notary</option>
+            <option>Apostille</option>
+            <option>Loan Signing</option>
+            <option>Real Estate</option>
+            <option>Power of Attorney</option>
+          </select>
+          <select id="jfil-dist" class="jfil-input" aria-label="Max distance" onchange="onFilterChange()">
+            <option value="">Any distance</option>
+            <option value="5">Within 5 mi</option>
+            <option value="10">Within 10 mi</option>
+            <option value="25">Within 25 mi</option>
+            <option value="50">Within 50 mi</option>
+          </select>
+        </div>
+        <div class="jfil-row">
+          <input type="number" id="jfil-pmin" class="jfil-input" placeholder="Min $" min="0" aria-label="Minimum price" oninput="onFilterChange()">
+          <input type="number" id="jfil-pmax" class="jfil-input" placeholder="Max $" min="0" aria-label="Maximum price" oninput="onFilterChange()">
+        </div>
+        <div class="jfil-row">
+          <input type="date" id="jfil-dstart" class="jfil-input" aria-label="Start date" onchange="onFilterChange()">
+          <input type="date" id="jfil-dend" class="jfil-input" aria-label="End date" onchange="onFilterChange()">
+        </div>
+        <div class="jfil-foot">
+          <span class="jfil-count" id="jfil-count"></span>
+          <a href="#" class="jfil-clear" id="jfil-clear" style="display:none;" onclick="clearFilters(event)">Clear filters</a>
+        </div>
+      </div>
+
       <div class="dash-jobs-list" id="dash-jobs-list">
         <!-- Rendered dynamically -->
       </div>
@@ -3157,6 +3211,60 @@ function cancelUserJob() {
 /* ================================================================
    NOTARY DASHBOARD — stats + available jobs feed
    ================================================================ */
+/* ================================================================
+   Job search + filter (notary dashboard) — client-side over STATE.jobs
+   ================================================================ */
+function getFilterValues() {
+  const v = id => (document.getElementById(id)?.value || '').trim();
+  return {
+    q:       v('jfil-search').toLowerCase(),
+    service: v('jfil-service'),
+    dist:    v('jfil-dist'),
+    pmin:    v('jfil-pmin'),
+    pmax:    v('jfil-pmax'),
+    dstart:  v('jfil-dstart'),
+    dend:    v('jfil-dend')
+  };
+}
+function isAnyFilterActive() {
+  const f = getFilterValues();
+  return !!(f.q || f.service || f.dist || f.pmin || f.pmax || f.dstart || f.dend);
+}
+function applyJobFilters(jobs) {
+  const f = getFilterValues();
+  return jobs.filter(job => {
+    // Substring search across service label, notes, and location.
+    if (f.q) {
+      const hay = [jobServiceLabel(job), job.notes || '', job.location || ''].join(' ').toLowerCase();
+      if (!hay.includes(f.q)) return false;
+    }
+    if (f.service && !jobServices(job).includes(f.service)) return false;
+    if (f.dist) {
+      const max = +f.dist;
+      // Jobs with unknown distance are kept (can't exclude what we can't measure).
+      if (job._distMi != null && job._distMi > max) return false;
+    }
+    const price = +job.startingPrice || 0;
+    if (f.pmin && price < +f.pmin) return false;
+    if (f.pmax && price > +f.pmax) return false;
+    if (f.dstart || f.dend) {
+      const d = job.dateTime ? new Date(job.dateTime) : null;
+      if (d && !isNaN(d)) {
+        if (f.dstart && d < new Date(f.dstart + 'T00:00')) return false;
+        if (f.dend && d > new Date(f.dend + 'T23:59')) return false;
+      }
+    }
+    return true;
+  });
+}
+function onFilterChange() { renderDashboard(); }
+function clearFilters(e) {
+  if (e) e.preventDefault();
+  ['jfil-search','jfil-service','jfil-dist','jfil-pmin','jfil-pmax','jfil-dstart','jfil-dend']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  renderDashboard();
+}
+
 function renderDashboard() {
   const myId = STATE.notaryUser.id;
   const myBids = STATE.bids.filter(b => b.notaryId === myId);
@@ -3245,13 +3353,27 @@ function renderDashboard() {
     }
   }
 
+  // Apply the search/filter bar on top of the distance-filtered set.
+  const shownJobs = applyJobFilters(filteredJobs);
+  const filtersActive = isAnyFilterActive();
+  const countEl = document.getElementById('jfil-count');
+  if (countEl) countEl.textContent = `Showing ${shownJobs.length} of ${filteredJobs.length} jobs`;
+  const clearEl = document.getElementById('jfil-clear');
+  if (clearEl) clearEl.style.display = filtersActive ? '' : 'none';
+
   document.getElementById('dash-job-count').textContent = filteredJobs.length + ' open near you';
 
   const list = document.getElementById('dash-jobs-list');
   if (isHydrating) {
     list.innerHTML = [1,2,3].map(() => renderJobCardSkeleton()).join('');
-  } else if (filteredJobs.length === 0) {
-    list.innerHTML = `
+  } else if (shownJobs.length === 0) {
+    list.innerHTML = filtersActive ? `
+      <div class="empty-state">
+        <div class="es-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0e0e0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+        <div class="es-title">No jobs match your filters</div>
+        <div class="es-sub">Try widening your search or <a href="#" onclick="clearFilters(event)" style="color:#666;text-decoration:underline;">clear filters</a>.</div>
+      </div>
+    ` : `
       <div class="empty-state">
         <div class="es-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0e0e0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
         <div class="es-title">No open jobs yet</div>
@@ -3260,7 +3382,7 @@ function renderDashboard() {
     `;
   } else {
 
-    list.innerHTML = filteredJobs.map(job => {
+    list.innerHTML = shownJobs.map(job => {
     const allBids = bidsForJob(job.id);
     const lowest = allBids.length ? allBids[0].price : null;
     const alreadyBid = myBidJobIds.has(job.id);
