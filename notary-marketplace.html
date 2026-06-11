@@ -723,6 +723,19 @@
   .jfil-clear { font-size: 9px; color: #666; text-decoration: underline; cursor: pointer; }
   .jfil-clear:hover { color: #000; }
 
+  /* Customer stats panel */
+  .customer-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px; margin-bottom: 16px;
+  }
+  .cstat-card {
+    height: 80px; border: 1px solid var(--line); border-radius: 8px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; background: #fff;
+  }
+  .cstat-num { font-size: 22px; font-weight: 700; color: #111; letter-spacing: -.5px; }
+  .cstat-label { font-size: 9px; color: #666; font-weight: 500; }
+
   /* My Jobs — tabs + past job cards */
   .myjobs-tabs { margin-bottom: 14px; }
   .past-job-card { margin-bottom: 10px; padding: 13px 14px; }
@@ -3296,6 +3309,68 @@ function pickMessage(job) {
     ``
   ];
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/* ================================================================
+   CUSTOMER STATS PANEL — shown above the My Jobs tabs.
+   ================================================================ */
+let _customerStatsAnimated = false;
+function computeCustomerStats() {
+  const userJobs = STATE.jobs.filter(j => j.isUserJob);
+  const acceptedBids = userJobs
+    .map(j => j.acceptedBidId ? STATE.bids.find(b => b.id === j.acceptedBidId) : null)
+    .filter(Boolean);
+  const notariesUsed = new Set(acceptedBids.map(b => b.notaryId)).size;
+  const totalSpent = userJobs
+    .filter(j => j.status === 'completed')
+    .reduce((sum, j) => {
+      const b = j.acceptedBidId ? STATE.bids.find(x => x.id === j.acceptedBidId) : null;
+      return sum + (b ? b.price : 0);
+    }, 0);
+  return { jobsPosted: userJobs.length, notariesUsed, totalSpent };
+}
+function renderCustomerStats() {
+  const s = computeCustomerStats();
+  if (s.jobsPosted === 0) return '';
+  return `
+    <div class="customer-stats" id="customer-stats">
+      <div class="cstat-card">
+        <div class="cstat-num" data-target="${s.jobsPosted}">0</div>
+        <div class="cstat-label">Jobs posted</div>
+      </div>
+      <div class="cstat-card">
+        <div class="cstat-num" data-target="${s.notariesUsed}">0</div>
+        <div class="cstat-label">Notaries used</div>
+      </div>
+      <div class="cstat-card">
+        <div class="cstat-num" data-target="${s.totalSpent}" data-prefix="$">$0</div>
+        <div class="cstat-label">Total spent</div>
+      </div>
+    </div>`;
+}
+function animateCustomerStats() {
+  const panel = document.getElementById('customer-stats');
+  if (!panel) return;
+  const nums = panel.querySelectorAll('.cstat-num');
+  if (_customerStatsAnimated) {
+    // Already animated this session — render final values immediately.
+    nums.forEach(el => { el.textContent = (el.dataset.prefix || '') + (+el.dataset.target); });
+    return;
+  }
+  _customerStatsAnimated = true;
+  const DURATION = 600;
+  nums.forEach(el => {
+    const target = +el.dataset.target || 0;
+    const prefix = el.dataset.prefix || '';
+    const start = performance.now();
+    function tick(now) {
+      const t = Math.min(1, (now - start) / DURATION);
+      const eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = prefix + Math.round(target * eased);
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
 }
 
 /* ================================================================
