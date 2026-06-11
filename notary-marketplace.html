@@ -786,6 +786,35 @@
   }
 
   /* ============================================================
+     In-app messaging — chat bubbles
+     ============================================================ */
+  .msg-body {
+    flex: 1; display: flex; flex-direction: column; gap: 8px;
+    background: var(--surface-soft); min-height: 0;
+  }
+  .msg-empty { margin: auto; text-align: center; color: var(--text-faint); font-size: 10px; }
+  .msg-row { display: flex; max-width: 78%; }
+  .msg-row.mine { align-self: flex-end; justify-content: flex-end; }
+  .msg-row.theirs { align-self: flex-start; }
+  .msg-bubble {
+    padding: 7px 11px; border-radius: 12px; font-size: 10.5px;
+    line-height: 1.45; letter-spacing: .1px; word-break: break-word;
+    cursor: default;
+  }
+  .msg-row.mine .msg-bubble {
+    background: var(--ink); color: #fff; border-bottom-right-radius: 4px;
+  }
+  .msg-row.theirs .msg-bubble {
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-bottom-left-radius: 4px;
+  }
+  .msg-bubble[title] { position: relative; }
+  .msg-day { text-align: center; font-size: 8.5px; color: var(--text-faint); margin: 4px 0; }
+  .msg-foot { display: block; }
+  .msg-input-row { display: flex; gap: 8px; align-items: center; }
+  .msg-input-row .field-input { flex: 1; margin: 0; }
+
+  /* ============================================================
      Loading state — applied to submit buttons during async ops
      ============================================================ */
   .btn-loading { opacity: .6; pointer-events: none; }
@@ -1891,6 +1920,26 @@
     </div>
   </div>
 
+  <!-- Job messaging overlay — customer <-> accepted notary -->
+  <div class="overlay" id="msg-overlay">
+    <div class="modal" id="msg-modal" style="height:480px;">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title" id="msg-title">Messages</div>
+          <div class="modal-sub" id="msg-sub"></div>
+        </div>
+        <button class="modal-close" onclick="closeJobMessages()">&#x2715;</button>
+      </div>
+      <div class="modal-body msg-body" id="msg-body"></div>
+      <div class="modal-foot msg-foot">
+        <form class="msg-input-row" onsubmit="return sendJobMessage(event)">
+          <input type="text" id="msg-input" class="field-input" placeholder="Type a message…" autocomplete="off">
+          <button type="submit" class="btn btn-primary btn-sm">Send</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Mobile nav drawer — toggled by hamburger on small screens -->
   <div class="nav-drawer-backdrop" id="nav-drawer-backdrop" onclick="closeNavDrawer()"></div>
   <div class="nav-drawer" id="nav-drawer">
@@ -2883,7 +2932,7 @@ function renderConfirmedCard(bid, job) {
           ? `<button class="btn btn-ghost btn-sm" onclick="sbCompleteJob('${job.id}')">Mark as completed</button>`
           : ''}
         <button class="btn btn-primary btn-sm" onclick="toast('Calling ${bid.notaryName}…')">Call notary</button>
-        <button class="btn btn-secondary btn-sm" onclick="toast('Message sent')">Message</button>
+        <button class="btn btn-secondary btn-sm" onclick="openJobMessages('${job.id}')">Message</button>
         ${job.signedDocumentFilePath
           ? `<button class="btn btn-ghost btn-sm" onclick="openSignedUrl('job-documents','${job.signedDocumentFilePath}')">Download signed doc</button>`
           : ''}
@@ -3354,6 +3403,11 @@ function renderMyBidsList() {
         ${b.status === 'pending' && job && job.status === 'open'
           ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);">
                <button class="btn btn-ghost btn-sm" onclick="cancelBid('${b.id}')">Withdraw bid</button>
+             </div>`
+          : ''}
+        ${b.status === 'accepted' && job
+          ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);display:flex;gap:8px;">
+               <button class="btn btn-secondary btn-sm" onclick="openJobMessages('${job.id}')">Message customer</button>
              </div>`
           : ''}
       </div>
@@ -4355,6 +4409,179 @@ async function sbClearReadNotifications() {
 }
 
 /* ================================================================
+   IN-APP MESSAGING — per-job chat between customer & accepted notary
+   Works online (Supabase + realtime) and offline (localStorage demo).
+   ================================================================ */
+let _msgJobId   = null;
+let _msgUnsub   = null;
+let _msgList    = [];
+
+/* Stable identity for the current actor, online or offline. */
+function currentActorId() {
+  if (sbUser?.id) return sbUser.id;
+  return STATE.currentMode === 'notary'
+    ? (STATE.notaryUser?.id || 'notary-local')
+    : 'customer-local';
+}
+
+/* Local message store (offline/demo) — keyed by jobId. */
+function _msgStore() {
+  try { return JSON.parse(localStorage.getItem('nf_messages') || '{}'); }
+  catch { return {}; }
+}
+function _msgStoreSave(store) {
+  try { localStorage.setItem('nf_messages', JSON.stringify(store)); } catch {}
+}
+
+/* Resolve the other party {name, userId} for a job, from the actor's view. */
+function msgOtherParty(job) {
+  const acceptedBid = job.acceptedBidId
+    ? STATE.bids.find(b => b.id === job.acceptedBidId) : null;
+  const iAmNotary = STATE.currentMode === 'notary';
+  if (iAmNotary) {
+    return { name: job.customerName || 'Customer', userId: job.customerId || null };
+  }
+  return {
+    name: acceptedBid ? acceptedBid.notaryName : 'Notary',
+    userId: acceptedBid ? acceptedBid.notaryId : null
+  };
+}
+
+async function openJobMessages(jobId) {
+  const job = STATE.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  _msgJobId = jobId;
+
+  const other = msgOtherParty(job);
+  document.getElementById('msg-title').textContent = 'Messages';
+  document.getElementById('msg-sub').textContent =
+    `${jobServiceLabel(job)} · with ${other.name}`;
+  document.getElementById('msg-overlay').classList.add('open');
+
+  _msgList = [{ _loading: true }];
+  renderMessages();
+
+  _msgList = await sbLoadMessages(jobId);
+  renderMessages();
+
+  // Live updates while panel is open
+  if (_msgUnsub) { _msgUnsub(); _msgUnsub = null; }
+  _msgUnsub = sbRealtime.subscribeToMessages(jobId);
+
+  setTimeout(() => document.getElementById('msg-input')?.focus(), 60);
+}
+
+function closeJobMessages() {
+  document.getElementById('msg-overlay').classList.remove('open');
+  if (_msgUnsub) { _msgUnsub(); _msgUnsub = null; }
+  _msgJobId = null;
+}
+
+async function sbLoadMessages(jobId) {
+  if (sb && sbUser) {
+    try {
+      const { data, error } = await sb.from('messages')
+        .select('id, job_id, sender_id, body, created_at')
+        .eq('job_id', jobId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data || []).map(r => ({
+        id: r.id, jobId: r.job_id, senderId: r.sender_id,
+        body: r.body, created_at: r.created_at
+      }));
+    } catch (e) {
+      console.warn('[Supabase] load messages:', e);
+      return [];
+    }
+  }
+  return (_msgStore()[jobId] || []).slice();
+}
+
+/* Called by realtime when a message arrives (or locally after send). */
+function ingestMessage(msg) {
+  if (msg.jobId !== _msgJobId) return;
+  if (_msgList.find(m => m.id === msg.id)) return;
+  _msgList = _msgList.filter(m => !m._loading);
+  _msgList.push(msg);
+  renderMessages();
+}
+
+function renderMessages() {
+  const body = document.getElementById('msg-body');
+  if (!body) return;
+  const me = currentActorId();
+
+  if (_msgList.some(m => m._loading)) {
+    body.innerHTML = '<div class="msg-empty">Loading…</div>';
+    return;
+  }
+  if (_msgList.length === 0) {
+    body.innerHTML = '<div class="msg-empty">No messages yet.<br>Say hello 👋</div>';
+    return;
+  }
+
+  body.innerHTML = _msgList.map(m => {
+    const mine = m.senderId === me;
+    const t = new Date(m.created_at);
+    const ts = t.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    return `<div class="msg-row ${mine ? 'mine' : 'theirs'}">
+              <div class="msg-bubble" title="${escapeHTML(ts)}">${escapeHTML(m.body)}</div>
+            </div>`;
+  }).join('');
+  body.scrollTop = body.scrollHeight;
+}
+
+async function sendJobMessage(e) {
+  if (e) e.preventDefault();
+  const input = document.getElementById('msg-input');
+  const body = input?.value.trim();
+  if (!body || !_msgJobId) return false;
+  input.value = '';
+
+  const jobId = _msgJobId;
+  const job = STATE.jobs.find(j => j.id === jobId);
+  const me = currentActorId();
+  const now = new Date().toISOString();
+
+  if (sb && sbUser) {
+    try {
+      const { data, error } = await sb.from('messages')
+        .insert({ job_id: jobId, sender_id: sbUser.id, body })
+        .select('id, job_id, sender_id, body, created_at').single();
+      if (error) throw error;
+      ingestMessage({ id: data.id, jobId: data.job_id, senderId: data.sender_id,
+                      body: data.body, created_at: data.created_at });
+    } catch (err) {
+      console.warn('[Supabase] send message:', err);
+      toast('Message failed to send');
+      return false;
+    }
+  } else {
+    // Offline/demo — persist to localStorage
+    const msg = { id: 'm-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                  jobId, senderId: me, body, created_at: now };
+    const store = _msgStore();
+    (store[jobId] = store[jobId] || []).push(msg);
+    _msgStoreSave(store);
+    ingestMessage(msg);
+  }
+
+  // Notify the other party (best effort, online only)
+  if (job) {
+    const other = msgOtherParty(job);
+    if (other.userId && other.userId !== me) {
+      sbCreateNotification({
+        userId: other.userId, type: 'message',
+        title: 'New message',
+        body: `${body.slice(0, 60)}${body.length > 60 ? '…' : ''}`,
+        link_target: 'job:' + jobId
+      });
+    }
+  }
+  return false;
+}
+
+/* ================================================================
    SUPABASE REALTIME — live bid/job updates
    ================================================================ */
 const sbRealtime = (() => {
@@ -4540,7 +4767,28 @@ const sbRealtime = (() => {
     return () => unsubscribe(name);
   }
 
-  return { subscribeToJob, subscribeToOpenJobs, subscribeToNotifications, unsubscribe, unsubscribeAll };
+  function subscribeToMessages(jobId) {
+    if (!sb) return () => {};
+    const name = 'msg:' + jobId;
+    if (_ch.has(name)) return () => unsubscribe(name);
+
+    const channel = sb.channel(name)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'messages',
+        filter: `job_id=eq.${jobId}`
+      }, ({ new: row }) => {
+        ingestMessage({
+          id: row.id, jobId: row.job_id, senderId: row.sender_id,
+          body: row.body, created_at: row.created_at
+        });
+      })
+      .subscribe(status => _onStatus(name, status, () => subscribeToMessages(jobId)));
+
+    _ch.set(name, { channel, retryTimer: null });
+    return () => unsubscribe(name);
+  }
+
+  return { subscribeToJob, subscribeToOpenJobs, subscribeToNotifications, subscribeToMessages, unsubscribe, unsubscribeAll };
 })();
 
 /* ================================================================
