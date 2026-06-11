@@ -5103,13 +5103,30 @@ buildReviewStars();
    BLUR VALIDATION — show field errors on blur, clear on focus
    ================================================================ */
 (function attachBlurValidation() {
-  function blurRule(inputId, isValid, fieldId) {
+  // Ensure a .field-error message element exists directly below the input and
+  // carries the supplied copy. Errors show on blur, clear on next focus.
+  function blurRule(inputId, isValid, fieldId, message) {
     const el = document.getElementById(inputId);
     if (!el) return;
     const getField = () => fieldId ? document.getElementById(fieldId) : el.closest('.field');
+    const ensureErrEl = (f) => {
+      if (!f) return null;
+      let err = f.querySelector('.field-error');
+      if (!err) {
+        err = document.createElement('div');
+        err.className = 'field-error';
+        err.setAttribute('role', 'alert');
+        err.setAttribute('aria-live', 'polite');
+        f.appendChild(err);
+      }
+      return err;
+    };
     el.addEventListener('blur', () => {
       const f = getField();
-      if (f) f.classList.toggle('has-error', !isValid());
+      if (!f) return;
+      const bad = !isValid();
+      f.classList.toggle('has-error', bad);
+      if (bad && message) { const e = ensureErrEl(f); if (e && !e.textContent) e.textContent = message; }
     });
     el.addEventListener('focus', () => {
       const f = getField();
@@ -5118,28 +5135,28 @@ buildReviewStars();
   }
 
   // Post-job form fields
-  blurRule('jf-signatures', () => { const v = +document.getElementById('jf-signatures')?.value; return v >= 1; });
-  blurRule('jf-location',   () => (document.getElementById('jf-location')?.value || '').trim().length > 0);
-  blurRule('jf-datetime',   () => !!document.getElementById('jf-datetime')?.value);
-  blurRule('jf-price',      () => { const v = +document.getElementById('jf-price')?.value; return v > 0; });
-  blurRule('jf-name',       () => (document.getElementById('jf-name')?.value || '').trim().length > 0);
-  blurRule('jf-email',      () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('jf-email')?.value || ''));
-  blurRule('jf-password',   () => !sb || (document.getElementById('jf-password')?.value || '').length >= 6);
+  blurRule('jf-signatures', () => { const v = +document.getElementById('jf-signatures')?.value; return v >= 1; }, null, 'Enter at least 1 signature.');
+  blurRule('jf-location',   () => (document.getElementById('jf-location')?.value || '').trim().length > 0, null, 'Enter the job location.');
+  blurRule('jf-datetime',   () => !!document.getElementById('jf-datetime')?.value, null, 'Pick a date and time.');
+  blurRule('jf-price',      () => { const v = +document.getElementById('jf-price')?.value; return v > 0; }, null, 'Enter a valid amount.');
+  blurRule('jf-name',       () => (document.getElementById('jf-name')?.value || '').trim().length > 0, null, 'Enter your name.');
+  blurRule('jf-email',      () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('jf-email')?.value || ''), null, 'Enter a valid email.');
+  blurRule('jf-password',   () => !sb || (document.getElementById('jf-password')?.value || '').length >= 6, null, 'At least 6 characters.');
 
   // Notary login fields
-  blurRule('nl-name',     () => (document.getElementById('nl-name')?.value     || '').trim().length > 0, 'nl-name-field');
-  blurRule('nl-email',    () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('nl-email')?.value || ''), 'nl-email-field');
-  blurRule('nl-phone',    () => (document.getElementById('nl-phone')?.value    || '').trim().length > 0, 'nl-phone-field');
-  blurRule('nl-license',  () => (document.getElementById('nl-license')?.value  || '').trim().length > 0, 'nl-license-field');
-  blurRule('nl-password', () => !sb || (document.getElementById('nl-password')?.value || '').length >= 6, 'nl-password-field');
+  blurRule('nl-name',     () => (document.getElementById('nl-name')?.value     || '').trim().length > 0, 'nl-name-field', 'Enter your name.');
+  blurRule('nl-email',    () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('nl-email')?.value || ''), 'nl-email-field', 'Enter a valid email.');
+  blurRule('nl-phone',    () => (document.getElementById('nl-phone')?.value    || '').trim().length > 0, 'nl-phone-field', 'Enter your phone number.');
+  blurRule('nl-license',  () => (document.getElementById('nl-license')?.value  || '').trim().length > 0, 'nl-license-field', 'Enter your license number.');
+  blurRule('nl-password', () => !sb || (document.getElementById('nl-password')?.value || '').length >= 6, 'nl-password-field', 'At least 6 characters.');
 
   // Set-password page
-  blurRule('sp-password', () => (document.getElementById('sp-password')?.value || '').length >= 6, 'sp-password-field');
+  blurRule('sp-password', () => (document.getElementById('sp-password')?.value || '').length >= 6, 'sp-password-field', 'At least 6 characters.');
   blurRule('sp-confirm',  () => {
     const pw = document.getElementById('sp-password')?.value;
     const cf = document.getElementById('sp-confirm')?.value;
     return !!cf && cf === pw;
-  }, 'sp-confirm-field');
+  }, 'sp-confirm-field', 'Passwords must match.');
 
   // Bid modal price (has custom error text)
   const bmPriceEl = document.getElementById('bm-price');
