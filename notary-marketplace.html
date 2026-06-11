@@ -815,6 +815,25 @@
   .msg-input-row .field-input { flex: 1; margin: 0; }
 
   /* ============================================================
+     Notary availability mini-calendar
+     ============================================================ */
+  .avail-cal {
+    display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px;
+    max-width: 340px;
+  }
+  .avail-day {
+    border: 1px solid var(--border); background: var(--surface);
+    border-radius: 5px; cursor: pointer; padding: 3px 0;
+    display: flex; flex-direction: column; align-items: center;
+    font-family: inherit; transition: background .12s, border-color .12s;
+  }
+  .avail-day:hover { border-color: var(--ink); }
+  .avail-mon { font-size: 6.5px; color: var(--text-faint); line-height: 1; text-transform: uppercase; letter-spacing: .3px; }
+  .avail-num { font-size: 9.5px; color: var(--text); font-weight: 500; line-height: 1.3; }
+  .avail-day.blocked { background: var(--surface-mute); border-color: var(--border); }
+  .avail-day.blocked .avail-num { color: var(--text-ghost); text-decoration: line-through; }
+
+  /* ============================================================
      Loading state — applied to submit buttons during async ops
      ============================================================ */
   .btn-loading { opacity: .6; pointer-events: none; }
@@ -2366,7 +2385,10 @@ function goTo(pageId) {
 
   // Re-render dynamic pages on entry.
   if (pageId === 'my-job') renderMyJob();
-  if (pageId === 'notary-dashboard') { renderDashboard(); renderNotaryHeaderPill(); }
+  if (pageId === 'notary-dashboard') {
+    sbLoadUnavailable().then(() => { if (document.getElementById('notary-dashboard').classList.contains('active')) renderDashboard(); });
+    renderDashboard(); renderNotaryHeaderPill();
+  }
   if (pageId === 'my-bids') { renderMyBids(); renderNotaryHeaderPill(); }
   if (pageId === 'post-job') resetPostJobForm();
 
@@ -3058,11 +3080,17 @@ function renderDashboard() {
     openJobs.sort((a, b) => b.postedAt - a.postedAt);
   }
 
+  // Hide jobs that fall on a date the notary has blocked off.
+  const availJobs = openJobs.filter(j => {
+    if (!j.dateTime) return true;
+    return !notaryUnavailable.has(j.dateTime.slice(0, 10));
+  });
+
   // Filter by max travel (respect showAllJobs toggle)
   const filteredJobs = (hasHome && !showAllJobs)
-    ? openJobs.filter(j => j._distMi === null || j._distMi <= maxMi)
-    : openJobs;
-  const hiddenCount = openJobs.length - filteredJobs.length;
+    ? availJobs.filter(j => j._distMi === null || j._distMi <= maxMi)
+    : availJobs;
+  const hiddenCount = availJobs.length - filteredJobs.length;
 
   // Distance / filter banner
   const bannerEl = document.getElementById('dash-distance-banner');
@@ -3617,6 +3645,9 @@ function toggleNotarySettings() {
         <button class="btn btn-primary btn-sm" onclick="saveNotarySettings()">Save</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleNotarySettings()">Cancel</button>
       </div>
+      <div style="font-size:11px;font-weight:600;color:#000;letter-spacing:-.2px;margin:18px 0 4px;">Availability</div>
+      <div style="font-size:9px;color:#999;margin-bottom:10px;">Tap a date to block it. Jobs on blocked dates are hidden from your feed.</div>
+      <div class="avail-cal" id="ns-availability-grid"></div>
     </div>
   `;
   nsLocation.lat = notarySession?.homeLat ?? null;
@@ -3638,7 +3669,80 @@ function toggleNotarySettings() {
         nsGeoTimer = setTimeout(() => geocodeNsAddress(addrEl.value), 600);
       });
     }
+    sbLoadUnavailable().then(renderAvailabilityCalendar);
   }, 80);
+}
+
+/* ================================================================
+   NOTARY AVAILABILITY — block/unblock dates on a 60-day mini-calendar
+   ================================================================ */
+let notaryUnavailable = new Set();   // 'YYYY-MM-DD' strings
+
+function _availKey() {
+  return 'nf_unavailable_' + (sbUser?.id || STATE.notaryUser?.id || 'local');
+}
+
+async function sbLoadUnavailable() {
+  if (sb && sbUser) {
+    try {
+      const { data, error } = await sb.from('notary_unavailable_dates')
+        .select('blocked_date').eq('notary_id', sbUser.id);
+      if (error) throw error;
+      notaryUnavailable = new Set((data || []).map(r => r.blocked_date));
+      return notaryUnavailable;
+    } catch (e) {
+      console.warn('[Supabase] load unavailable:', e);
+    }
+  }
+  try {
+    notaryUnavailable = new Set(JSON.parse(localStorage.getItem(_availKey()) || '[]'));
+  } catch { notaryUnavailable = new Set(); }
+  return notaryUnavailable;
+}
+
+async function sbToggleAvailability(dateStr) {
+  const blocking = !notaryUnavailable.has(dateStr);
+  if (blocking) notaryUnavailable.add(dateStr);
+  else notaryUnavailable.delete(dateStr);
+
+  if (sb && sbUser) {
+    try {
+      if (blocking) {
+        await sb.from('notary_unavailable_dates')
+          .insert({ notary_id: sbUser.id, blocked_date: dateStr });
+      } else {
+        await sb.from('notary_unavailable_dates').delete()
+          .eq('notary_id', sbUser.id).eq('blocked_date', dateStr);
+      }
+    } catch (e) {
+      console.warn('[Supabase] toggle availability:', e);
+    }
+  } else {
+    try { localStorage.setItem(_availKey(), JSON.stringify([...notaryUnavailable])); } catch {}
+  }
+  renderAvailabilityCalendar();
+}
+
+function renderAvailabilityCalendar() {
+  const grid = document.getElementById('ns-availability-grid');
+  if (!grid) return;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let html = '';
+  for (let i = 0; i < 60; i++) {
+    const d = new Date(today.getTime() + i * 24 * 60 * 60 * 1000);
+    const key = d.toISOString().slice(0, 10);
+    const blocked = notaryUnavailable.has(key);
+    const label = d.getDate();
+    const mon = d.toLocaleString([], { month: 'short' });
+    const showMon = i === 0 || d.getDate() === 1;
+    html += `<button type="button" class="avail-day${blocked ? ' blocked' : ''}"
+                onclick="sbToggleAvailability('${key}')"
+                title="${d.toLocaleDateString()}">
+               <span class="avail-mon">${showMon ? mon : '&nbsp;'}</span>
+               <span class="avail-num">${label}</span>
+             </button>`;
+  }
+  grid.innerHTML = html;
 }
 
 async function geocodeNsAddress(query) {
