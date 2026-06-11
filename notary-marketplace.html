@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>NotaryFinder — Marketplace</title>
+<!-- PWA — installable web app -->
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjogIk5vdGFyeUZpbmRlciIsICJzaG9ydF9uYW1lIjogIk5vdGFyeUZpbmRlciIsICJkZXNjcmlwdGlvbiI6ICJGaW5kIGEgdHJ1c3RlZCBub3RhcnkgbmVhciB5b3UsIGZhc3QuIiwgInN0YXJ0X3VybCI6ICIuIiwgInNjb3BlIjogIi4iLCAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwgIm9yaWVudGF0aW9uIjogInBvcnRyYWl0IiwgImJhY2tncm91bmRfY29sb3IiOiAiI2ZmZmZmZiIsICJ0aGVtZV9jb2xvciI6ICIjMDAwMDAwIiwgImljb25zIjogW3sic3JjIjogImRhdGE6aW1hZ2Uvc3ZnK3htbCwlM0NzdmclMjB4bWxucyUzRCUyMmh0dHAlM0EvL3d3dy53My5vcmcvMjAwMC9zdmclMjIlMjB2aWV3Qm94JTNEJTIyMCUyMDAlMjA1MTIlMjA1MTIlMjIlM0UlM0NyZWN0JTIwd2lkdGglM0QlMjI1MTIlMjIlMjBoZWlnaHQlM0QlMjI1MTIlMjIlMjByeCUzRCUyMjk2JTIyJTIwZmlsbCUzRCUyMiUyMzAwMCUyMi8lM0UlM0N0ZXh0JTIweCUzRCUyMjUwJTI1JTIyJTIweSUzRCUyMjU2JTI1JTIyJTIwZm9udC1mYW1pbHklM0QlMjJBcmlhbCUyQ3NhbnMtc2VyaWYlMjIlMjBmb250LXNpemUlM0QlMjIyMTAlMjIlMjBmb250LXdlaWdodCUzRCUyMjcwMCUyMiUyMGZpbGwlM0QlMjIlMjNmZmYlMjIlMjB0ZXh0LWFuY2hvciUzRCUyMm1pZGRsZSUyMiUyMGRvbWluYW50LWJhc2VsaW5lJTNEJTIybWlkZGxlJTIyJTNFTkYlM0MvdGV4dCUzRSUzQy9zdmclM0UiLCAic2l6ZXMiOiAiMTkyeDE5MiIsICJ0eXBlIjogImltYWdlL3N2Zyt4bWwiLCAicHVycG9zZSI6ICJhbnkifSwgeyJzcmMiOiAiZGF0YTppbWFnZS9zdmcreG1sLCUzQ3N2ZyUyMHhtbG5zJTNEJTIyaHR0cCUzQS8vd3d3LnczLm9yZy8yMDAwL3N2ZyUyMiUyMHZpZXdCb3glM0QlMjIwJTIwMCUyMDUxMiUyMDUxMiUyMiUzRSUzQ3JlY3QlMjB3aWR0aCUzRCUyMjUxMiUyMiUyMGhlaWdodCUzRCUyMjUxMiUyMiUyMHJ4JTNEJTIyOTYlMjIlMjBmaWxsJTNEJTIyJTIzMDAwJTIyLyUzRSUzQ3RleHQlMjB4JTNEJTIyNTAlMjUlMjIlMjB5JTNEJTIyNTYlMjUlMjIlMjBmb250LWZhbWlseSUzRCUyMkFyaWFsJTJDc2Fucy1zZXJpZiUyMiUyMGZvbnQtc2l6ZSUzRCUyMjIxMCUyMiUyMGZvbnQtd2VpZ2h0JTNEJTIyNzAwJTIyJTIwZmlsbCUzRCUyMiUyM2ZmZiUyMiUyMHRleHQtYW5jaG9yJTNEJTIybWlkZGxlJTIyJTIwZG9taW5hbnQtYmFzZWxpbmUlM0QlMjJtaWRkbGUlMjIlM0VORiUzQy90ZXh0JTNFJTNDL3N2ZyUzRSIsICJzaXplcyI6ICI1MTJ4NTEyIiwgInR5cGUiOiAiaW1hZ2Uvc3ZnK3htbCIsICJwdXJwb3NlIjogImFueSBtYXNrYWJsZSJ9XX0=">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20512%20512%22%3E%3Crect%20width%3D%22512%22%20height%3D%22512%22%20rx%3D%2296%22%20fill%3D%22%23000%22/%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2256%25%22%20font-family%3D%22Arial%2Csans-serif%22%20font-size%3D%22210%22%20font-weight%3D%22700%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3ENF%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20512%20512%22%3E%3Crect%20width%3D%22512%22%20height%3D%22512%22%20rx%3D%2296%22%20fill%3D%22%23000%22/%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2256%25%22%20font-family%3D%22Arial%2Csans-serif%22%20font-size%3D%22210%22%20font-weight%3D%22700%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3ENF%3C/text%3E%3C/svg%3E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NotaryFinder">
+<meta name="theme-color" content="#000000">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap');
 
@@ -1318,6 +1326,8 @@
       <a data-legal="privacy" href="#" target="_blank" rel="noopener">Privacy</a>
       <span class="sep">|</span>
       <span>Contact: <a href="mailto:hello@printnparcel.com">hello@printnparcel.com</a></span>
+      <span class="sep" id="pwa-sep" style="display:none;">|</span>
+      <button id="pwa-install-btn" onclick="pwaInstall()" style="display:none;background:none;border:none;font-family:inherit;font-size:10px;color:#999;cursor:pointer;padding:0;text-decoration:underline;">Install app</button>
     </div>
   </div>
 
@@ -4756,6 +4766,69 @@ function downloadJobIcs(jobId) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   toast('Calendar event downloaded');
+}
+
+/* ================================================================
+   PWA — installability: service worker + beforeinstallprompt
+   ================================================================ */
+let _deferredInstallPrompt = null;
+
+(function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  // Minimal inline SW: cache the page shell on first visit, serve when offline.
+  const swSource = `
+    const CACHE = 'notaryfinder-v1';
+    self.addEventListener('install', e => {
+      e.waitUntil(caches.open(CACHE).then(c => c.add('./')).catch(() => {}));
+      self.skipWaiting();
+    });
+    self.addEventListener('activate', e => self.clients.claim());
+    self.addEventListener('fetch', e => {
+      if (e.request.method !== 'GET') return;
+      e.respondWith(
+        caches.match(e.request).then(hit =>
+          hit || fetch(e.request).then(res => {
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+            return res;
+          }).catch(() => caches.match('./'))
+        )
+      );
+    });
+  `;
+  try {
+    const blob = new Blob([swSource], { type: 'text/javascript' });
+    const url = URL.createObjectURL(blob);
+    navigator.serviceWorker.register(url)
+      .catch(err => console.warn('[PWA] SW registration failed:', err));
+  } catch (e) {
+    console.warn('[PWA] SW unavailable:', e);
+  }
+})();
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  const btn = document.getElementById('pwa-install-btn');
+  const sep = document.getElementById('pwa-sep');
+  if (btn) btn.style.display = 'inline';
+  if (sep) sep.style.display = 'inline';
+});
+
+window.addEventListener('appinstalled', () => {
+  _deferredInstallPrompt = null;
+  const btn = document.getElementById('pwa-install-btn');
+  const sep = document.getElementById('pwa-sep');
+  if (btn) btn.style.display = 'none';
+  if (sep) sep.style.display = 'none';
+  toast('App installed');
+});
+
+async function pwaInstall() {
+  if (!_deferredInstallPrompt) return;
+  _deferredInstallPrompt.prompt();
+  try { await _deferredInstallPrompt.userChoice; } catch {}
+  _deferredInstallPrompt = null;
 }
 
 /* ================================================================
