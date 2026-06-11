@@ -129,6 +129,25 @@
   }
   .draft-banner-text { font-size: 10.5px; font-weight: 500; color: #333; }
   .draft-banner-acts { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* Accessibility — skip link (keyboard-only visible) */
+  .skip-link {
+    position: fixed; top: -60px; left: 8px; z-index: 999;
+    background: #000; color: #fff; font-family: 'DM Sans', sans-serif;
+    font-size: 12px; font-weight: 600; padding: 9px 14px; border-radius: 6px;
+    text-decoration: none; transition: top .15s ease;
+  }
+  .skip-link:focus { top: 8px; outline: 2px solid #fff; outline-offset: 2px; }
+
+  /* Accessibility — bump low-contrast body text to #666 minimum */
+  .empty-state .es-sub,
+  .jfil-count,
+  .past-job-meta,
+  .past-job-date,
+  .global-footer,
+  .kbd-hint,
+  .job-card-meta,
+  .stat-value-sub { color: #666 !important; }
   .kbd-row kbd {
     font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 600;
     min-width: 30px; text-align: center; padding: 3px 7px;
@@ -1361,10 +1380,12 @@
 </head>
 <body>
 
+<a href="#main-content" class="skip-link">Skip to main content</a>
+
 <div class="scene">
 <div class="laptop-lid">
-<div class="screen">
-  <div id="rt-dot" title="Realtime connection"></div>
+<div class="screen" id="main-content" tabindex="-1">
+  <div id="rt-dot" title="Realtime connection" aria-hidden="true"></div>
 
   <!-- ============================================================
        Toast notifier — shared across all pages
@@ -2209,6 +2230,58 @@ document.addEventListener('keydown', e => {
       e.preventDefault(); openShortcuts();
       break;
   }
+});
+
+/* ================================================================
+   ACCESSIBILITY — aria labels, modal dialogs, focus trap + return.
+   ================================================================ */
+let _lastFocusedBeforeModal = null;
+function setupAccessibility() {
+  // Icon-only buttons get descriptive labels.
+  document.querySelectorAll('.menu-btn').forEach(b => b.setAttribute('aria-label', 'Open menu'));
+  document.querySelectorAll('.notif-bell').forEach(b => { if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', 'Notifications'); });
+  document.querySelectorAll('.modal-close').forEach(b => { if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', 'Close dialog'); });
+
+  // Required inputs advertise aria-required; error messages become live regions.
+  document.querySelectorAll('input[required], select[required], textarea[required]')
+    .forEach(el => el.setAttribute('aria-required', 'true'));
+  document.querySelectorAll('.field-error').forEach(el => {
+    el.setAttribute('role', 'alert');
+    el.setAttribute('aria-live', 'polite');
+  });
+
+  // Modals are dialogs; watch open/close to manage focus.
+  document.querySelectorAll('.overlay').forEach(ov => {
+    const modal = ov.querySelector('.modal');
+    if (modal) {
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+    }
+    const obs = new MutationObserver(() => {
+      if (ov.classList.contains('open')) {
+        _lastFocusedBeforeModal = document.activeElement;
+        const focusable = ov.querySelector('input:not([disabled]), button:not([disabled]), textarea, select, a[href]');
+        if (focusable) setTimeout(() => focusable.focus(), 30);
+      } else if (_lastFocusedBeforeModal && typeof _lastFocusedBeforeModal.focus === 'function') {
+        const el = _lastFocusedBeforeModal; _lastFocusedBeforeModal = null;
+        setTimeout(() => el.focus(), 0);
+      }
+    });
+    obs.observe(ov, { attributes: true, attributeFilter: ['class'] });
+  });
+}
+
+// Focus trap — keep Tab within the open modal.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Tab') return;
+  const ov = document.querySelector('.overlay.open');
+  if (!ov) return;
+  const items = [...ov.querySelectorAll('input, button, textarea, select, a[href]')]
+    .filter(el => !el.disabled && el.offsetParent !== null);
+  if (!items.length) return;
+  const first = items[0], last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 });
 
 /* ================================================================
@@ -5869,6 +5942,7 @@ document.addEventListener('click', e => {
     btn.classList.toggle('on', btn.dataset.mode === 'customer');
   });
   goTo('home');
+  setupAccessibility();
 
   // Honor a deep-linked hash on initial load (browser back/forward handled by router()).
   if (window.location.hash && window.location.hash !== '#/') {
