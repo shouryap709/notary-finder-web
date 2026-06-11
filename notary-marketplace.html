@@ -120,6 +120,15 @@
     font-size: 11px; color: #444;
   }
   .kbd-row:last-child { border-bottom: none; }
+
+  /* Form auto-save restore banner */
+  .draft-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 12px; margin-bottom: 14px;
+    background: #f7f7f7; border: 1px solid var(--line); border-radius: 8px;
+  }
+  .draft-banner-text { font-size: 10.5px; font-weight: 500; color: #333; }
+  .draft-banner-acts { display: flex; gap: 6px; flex-shrink: 0; }
   .kbd-row kbd {
     font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 600;
     min-width: 30px; text-align: center; padding: 3px 7px;
@@ -1438,6 +1447,13 @@
     </div>
 
     <div class="form-shell">
+      <div class="draft-banner" id="job-draft-banner" style="display:none;">
+        <span class="draft-banner-text">Restore your in-progress job?</span>
+        <span class="draft-banner-acts">
+          <button class="btn btn-secondary btn-sm" onclick="restoreJobDraft()">Restore</button>
+          <button class="btn btn-ghost btn-sm" onclick="discardJobDraft()">Discard</button>
+        </span>
+      </div>
       <div class="page-title">Post a job</div>
       <div class="page-subtitle">Five quick steps. We'll send your job to nearby notaries the moment you submit.</div>
 
@@ -1834,6 +1850,13 @@
       </div>
     </div>
     <div class="form-shell" style="max-width:420px;">
+      <div class="draft-banner" id="notary-draft-banner" style="display:none;">
+        <span class="draft-banner-text">Restore your in-progress sign-up?</span>
+        <span class="draft-banner-acts">
+          <button class="btn btn-secondary btn-sm" onclick="restoreNotaryDraft()">Restore</button>
+          <button class="btn btn-ghost btn-sm" onclick="discardNotaryDraft()">Discard</button>
+        </span>
+      </div>
       <div class="page-title">Notary sign in</div>
       <div class="page-subtitle">Create your free profile and start receiving jobs in your area.</div>
       <div class="field" id="nl-name-field">
@@ -2608,7 +2631,8 @@ function goTo(pageId) {
   if (pageId === 'my-job') renderMyJob();
   if (pageId === 'notary-dashboard') { renderDashboard(); renderNotaryHeaderPill(); }
   if (pageId === 'my-bids') { renderMyBids(); renderNotaryHeaderPill(); }
-  if (pageId === 'post-job') resetPostJobForm();
+  if (pageId === 'post-job') { resetPostJobForm(); maybeShowJobDraftBanner(); }
+  if (pageId === 'notary-login') maybeShowNotaryDraftBanner();
 
   // Realtime lifecycle — subscribe for live updates.
   if (sb) {
@@ -2812,6 +2836,120 @@ function resetPostJobForm() {
   goToStep(1);
 }
 
+/* ================================================================
+   FORM AUTO-SAVE — persist in-progress forms to localStorage.
+   Password fields are never saved.
+   ================================================================ */
+const JOB_DRAFT_KEY = 'pendingJobDraft';
+const NOTARY_DRAFT_KEY = 'pendingNotaryDraft';
+
+function saveJobDraft() {
+  try {
+    const draft = {
+      services: [...selectedServices],
+      signatures: $signatures?.value || '',
+      pref: currentPref,
+      location: $location?.value || '',
+      datetime: $datetime?.value || '',
+      notes: $notes?.value || '',
+      price: $price?.value || '',
+      userTouchedPrice,
+      name: $name?.value || '',
+      email: $email?.value || ''
+    };
+    // Only persist when there's something worth restoring.
+    const meaningful = draft.services.length || draft.location || draft.notes || draft.name || draft.email;
+    if (meaningful) localStorage.setItem(JOB_DRAFT_KEY, JSON.stringify(draft));
+  } catch (e) { /* storage may be unavailable */ }
+}
+function restoreJobDraft() {
+  let draft;
+  try { draft = JSON.parse(localStorage.getItem(JOB_DRAFT_KEY) || 'null'); } catch (e) { draft = null; }
+  if (!draft) return;
+  selectedServices = new Set(draft.services || []);
+  $servicesGrid.querySelectorAll('.svc-pill').forEach(p => p.classList.toggle('on', selectedServices.has(p.dataset.svc)));
+  updateServicesCount();
+  if ($signatures && draft.signatures) $signatures.value = draft.signatures;
+  if (draft.pref) {
+    currentPref = draft.pref;
+    $prefGroup.querySelectorAll('.radio-pill').forEach(p => p.classList.toggle('on', p.dataset.val === currentPref));
+  }
+  if ($location) $location.value = draft.location || '';
+  if ($datetime) $datetime.value = draft.datetime || '';
+  if ($notes) $notes.value = draft.notes || '';
+  if ($name) $name.value = draft.name || '';
+  if ($email) $email.value = draft.email || '';
+  userTouchedPrice = !!draft.userTouchedPrice;
+  if (userTouchedPrice && $price) $price.value = draft.price || '';
+  else updateSuggested();
+  hideJobDraftBanner();
+  toast('Draft restored');
+}
+function discardJobDraft() {
+  try { localStorage.removeItem(JOB_DRAFT_KEY); } catch (e) {}
+  hideJobDraftBanner();
+}
+function clearJobDraft() { try { localStorage.removeItem(JOB_DRAFT_KEY); } catch (e) {} }
+function hideJobDraftBanner() { const b = document.getElementById('job-draft-banner'); if (b) b.style.display = 'none'; }
+function maybeShowJobDraftBanner() {
+  const b = document.getElementById('job-draft-banner');
+  if (!b) return;
+  let has = false;
+  try { has = !!localStorage.getItem(JOB_DRAFT_KEY); } catch (e) {}
+  b.style.display = has ? 'flex' : 'none';
+}
+
+function saveNotaryDraft() {
+  try {
+    const v = id => document.getElementById(id)?.value || '';
+    const draft = {
+      name: v('nl-name'), email: v('nl-email'), phone: v('nl-phone'),
+      license: v('nl-license'), home: v('nl-home-address'), maxTravel: v('nl-max-travel')
+    };
+    const meaningful = draft.name || draft.email || draft.phone || draft.license;
+    if (meaningful) localStorage.setItem(NOTARY_DRAFT_KEY, JSON.stringify(draft));
+  } catch (e) {}
+}
+function restoreNotaryDraft() {
+  let draft;
+  try { draft = JSON.parse(localStorage.getItem(NOTARY_DRAFT_KEY) || 'null'); } catch (e) { draft = null; }
+  if (!draft) return;
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+  set('nl-name', draft.name); set('nl-email', draft.email); set('nl-phone', draft.phone);
+  set('nl-license', draft.license); set('nl-home-address', draft.home); set('nl-max-travel', draft.maxTravel);
+  hideNotaryDraftBanner();
+  toast('Draft restored');
+}
+function discardNotaryDraft() {
+  try { localStorage.removeItem(NOTARY_DRAFT_KEY); } catch (e) {}
+  hideNotaryDraftBanner();
+}
+function clearNotaryDraft() { try { localStorage.removeItem(NOTARY_DRAFT_KEY); } catch (e) {} }
+function hideNotaryDraftBanner() { const b = document.getElementById('notary-draft-banner'); if (b) b.style.display = 'none'; }
+function maybeShowNotaryDraftBanner() {
+  const b = document.getElementById('notary-draft-banner');
+  if (!b) return;
+  let has = false;
+  try { has = !!localStorage.getItem(NOTARY_DRAFT_KEY); } catch (e) {}
+  b.style.display = has ? 'flex' : 'none';
+}
+
+// Wire input listeners once the DOM is ready.
+(function wireAutoSave() {
+  if ($jobForm) {
+    $jobForm.addEventListener('input', saveJobDraft);
+    $jobForm.addEventListener('change', saveJobDraft);
+  }
+  if ($servicesGrid) $servicesGrid.addEventListener('click', () => setTimeout(saveJobDraft, 0));
+  if ($prefGroup) $prefGroup.addEventListener('click', () => setTimeout(saveJobDraft, 0));
+  const notaryPage = document.getElementById('notary-login');
+  if (notaryPage) {
+    notaryPage.addEventListener('input', e => {
+      if (e.target && e.target.id !== 'nl-password') saveNotaryDraft();
+    });
+  }
+})();
+
 /* ----- Per-step validation -----
    Defensive: if an id can't be found OR has no .field ancestor, we
    still return the ok value rather than throwing. */
@@ -2942,6 +3080,7 @@ $jobForm.addEventListener('submit', async e => {
   seedBidsForUserJob(job);
 
   setLoading(submitBtn, false);
+  clearJobDraft();
   toast('Job posted — notaries are bidding now');
   goTo('my-job');
 });
@@ -4085,6 +4224,7 @@ async function submitNotaryLogin() {
   }
 
   setLoading(btn, false);
+  clearNotaryDraft();
   goTo('notary-dashboard');
 }
 
