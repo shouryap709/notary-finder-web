@@ -1570,6 +1570,15 @@
       </div>
       <div class="page-subtitle">Here are jobs in your area you can bid on.</div>
       <div id="notary-settings-panel" style="display:none;"></div>
+
+      <div class="tabs" id="dash-tabs">
+        <button class="tab-btn active" data-dashtab="jobs" onclick="setDashTab('jobs')">Jobs</button>
+        <button class="tab-btn" data-dashtab="earnings" onclick="setDashTab('earnings')">Earnings</button>
+      </div>
+
+      <div id="dash-earnings-view" style="display:none;"></div>
+
+      <div id="dash-jobs-view">
       <div id="dash-distance-banner"></div>
 
       <div class="stats-row">
@@ -1600,6 +1609,7 @@
         <!-- Rendered dynamically -->
       </div>
       <div id="dash-past-bids"></div>
+      </div><!-- /dash-jobs-view -->
     </div>
   </div>
 
@@ -3116,6 +3126,71 @@ function cancelUserJob() {
 /* ================================================================
    NOTARY DASHBOARD — stats + available jobs feed
    ================================================================ */
+let dashTab = 'jobs';
+
+function setDashTab(tab) {
+  dashTab = tab;
+  document.querySelectorAll('#dash-tabs .tab-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.dashtab === tab));
+  document.getElementById('dash-jobs-view').style.display = tab === 'jobs' ? 'block' : 'none';
+  document.getElementById('dash-earnings-view').style.display = tab === 'earnings' ? 'block' : 'none';
+  if (tab === 'earnings') renderNotaryEarnings();
+}
+
+function renderNotaryEarnings() {
+  const root = document.getElementById('dash-earnings-view');
+  const myId = STATE.notaryUser.id;
+  const myBids = STATE.bids.filter(b => b.notaryId === myId);
+  const accepted = myBids.filter(b => b.status === 'accepted');
+  const completed = accepted.filter(b => {
+    const j = STATE.jobs.find(x => x.id === b.jobId);
+    return j && j.status === 'completed';
+  });
+
+  if (completed.length === 0) {
+    root.innerHTML = `<div class="empty-state"><div class="es-title">No earnings yet.</div>
+      <div class="es-sub">Complete a job and your earnings insights will appear here.</div></div>`;
+    return;
+  }
+
+  const months = last12Months();
+  const byMonth = Object.fromEntries(months.map(m => [m.key, 0]));
+  let total = 0;
+  completed.forEach(b => {
+    const j = STATE.jobs.find(x => x.id === b.jobId);
+    total += b.price;
+    const k = jobMonthKey(j);
+    if (k in byMonth) byMonth[k] += b.price;
+  });
+  const values = months.map(m => byMonth[m.key]);
+  const thisMonth = values[values.length - 1];
+  const lastMonth = values[values.length - 2] || 0;
+  const avg = Math.round(total / completed.length);
+  const acceptRate = myBids.length ? Math.round((accepted.length / myBids.length) * 100) : 0;
+
+  let change = '';
+  if (lastMonth === 0 && thisMonth === 0) change = '<span style="color:#aaa;">No change</span>';
+  else if (lastMonth === 0) change = '<span style="color:var(--accent-green,#2db075);">▲ new</span>';
+  else {
+    const pct = Math.round(((thisMonth - lastMonth) / lastMonth) * 100);
+    const up = pct >= 0;
+    change = `<span style="color:${up ? 'var(--accent-green,#2db075)' : 'var(--accent-red,#d04545)'};">${up ? '▲' : '▼'} ${Math.abs(pct)}%</span>`;
+  }
+
+  root.innerHTML = `
+    <div class="section-label">Monthly earnings · last 12 months</div>
+    <div class="card" style="padding:12px 12px 6px;margin-bottom:14px;">${svgChart(months, values, 'bar')}</div>
+    <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:6px;">Lifetime earnings</div>
+    <div style="font-size:30px;font-weight:600;letter-spacing:-1px;margin-bottom:14px;">$${total.toLocaleString()}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      ${statTile('This month', '$' + thisMonth, 'vs last: ' + change)}
+      ${statTile('Average per job', '$' + avg)}
+      ${statTile('Jobs completed', completed.length)}
+      ${statTile('Acceptance rate', acceptRate + '%', accepted.length + ' of ' + myBids.length + ' bids')}
+    </div>
+  `;
+}
+
 function renderDashboard() {
   const myId = STATE.notaryUser.id;
   const myBids = STATE.bids.filter(b => b.notaryId === myId);
