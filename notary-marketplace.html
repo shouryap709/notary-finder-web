@@ -269,6 +269,15 @@
   .urgency-text em { font-size: 9px; font-style: normal; color: #999; }
   .urgency-bump { font-size: 8.5px; font-weight: 600; color: #888; margin-left: 3px; }
 
+  /* Saved addresses (post-job step 2) */
+  .saved-addr-bar { margin-top: 7px; }
+  .acct-addr-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 0; border-bottom: 1px solid var(--line-soft); gap: 10px;
+  }
+  .acct-addr-row:last-child { border-bottom: none; }
+  .acct-addr-row strong { font-size: 11px; color: #000; }
+
   /* Urgency badge on notary job cards */
   .urgency-badge {
     display: inline-block; font-size: 8px; font-weight: 700;
@@ -1394,6 +1403,12 @@
             <label class="field-label" for="jf-location">Address or ZIP code</label>
             <input type="text" id="jf-location" class="field-input" placeholder="123 Main St, San Jose, CA 95126" required>
             <div class="field-error">Enter your address or ZIP.</div>
+            <div class="saved-addr-bar" id="jf-saved-addr-bar" style="display:none;">
+              <select id="jf-saved-addr" class="field-select" onchange="applySavedAddress(this.value)">
+                <option value="">Saved addresses…</option>
+              </select>
+            </div>
+            <button type="button" class="forgot-link" id="jf-save-addr-link" onclick="saveCurrentAddress()" style="margin-top:6px;">+ Save this address</button>
             <div id="jf-map"></div>
           </div>
 
@@ -2651,6 +2666,7 @@ function resetPostJobForm() {
   if (docName) { docName.textContent = ''; docName.style.display = 'none'; }
   const docProgress = document.getElementById('jf-doc-progress');
   if (docProgress) { docProgress.textContent = ''; docProgress.className = 'upload-progress'; }
+  sbLoadSavedAddresses();
   goToStep(1);
 }
 
@@ -4225,6 +4241,124 @@ $location.addEventListener('input', () => {
   clearTimeout(geocodeTimer);
   geocodeTimer = setTimeout(() => geocodeAddress($location.value), 600);
 });
+
+/* ================================================================
+   SAVED ADDRESSES — customer reusable locations
+   ================================================================ */
+let savedAddresses = [];
+
+function _savedAddrKey() {
+  return 'nf_saved_addr_' + (sbUser?.id || 'local');
+}
+
+async function sbLoadSavedAddresses() {
+  if (sb && sbUser) {
+    try {
+      const { data, error } = await sb.from('customer_saved_addresses')
+        .select('id, label, address, lat, lng')
+        .eq('customer_id', sbUser.id)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      savedAddresses = data || [];
+    } catch (e) {
+      console.warn('[Supabase] load saved addresses:', e);
+      savedAddresses = [];
+    }
+  } else {
+    try { savedAddresses = JSON.parse(localStorage.getItem(_savedAddrKey()) || '[]'); }
+    catch { savedAddresses = []; }
+  }
+  renderSavedAddrDropdown();
+  renderAccountSavedAddresses();
+  return savedAddresses;
+}
+
+function renderSavedAddrDropdown() {
+  const bar = document.getElementById('jf-saved-addr-bar');
+  const sel = document.getElementById('jf-saved-addr');
+  if (!bar || !sel) return;
+  if (savedAddresses.length === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+  sel.innerHTML = '<option value="">Saved addresses…</option>' +
+    savedAddresses.map(a => `<option value="${a.id}">${escapeHTML(a.label)} — ${escapeHTML(a.address)}</option>`).join('');
+}
+
+function applySavedAddress(id) {
+  if (!id) return;
+  const a = savedAddresses.find(x => String(x.id) === String(id));
+  if (!a) return;
+  $location.value = a.address;
+  jobLocation.lat = a.lat != null ? Number(a.lat) : null;
+  jobLocation.lng = a.lng != null ? Number(a.lng) : null;
+  $location.closest('.field')?.classList.remove('has-error');
+  if (window.L && a.lat != null) {
+    if (!leafletMap) initLocationMap();
+    leafletMap.setView([a.lat, a.lng], 14);
+    if (leafletMarker) leafletMarker.remove();
+    leafletMarker = L.marker([a.lat, a.lng]).addTo(leafletMap);
+  }
+}
+
+async function saveCurrentAddress() {
+  const address = $location.value.trim();
+  if (!address) { toast('Enter an address first'); return; }
+  const label = (prompt('Label this address (e.g. Home, Office):') || '').trim();
+  if (!label) return;
+
+  const rec = {
+    id: 'sa-' + Date.now(),
+    label, address,
+    lat: jobLocation.lat, lng: jobLocation.lng
+  };
+
+  if (sb && sbUser) {
+    try {
+      const { data, error } = await sb.from('customer_saved_addresses')
+        .insert({ customer_id: sbUser.id, label, address, lat: rec.lat, lng: rec.lng })
+        .select('id, label, address, lat, lng').single();
+      if (error) throw error;
+      savedAddresses.push(data);
+    } catch (e) {
+      console.warn('[Supabase] save address:', e);
+      toast('Could not save address');
+      return;
+    }
+  } else {
+    savedAddresses.push(rec);
+    try { localStorage.setItem(_savedAddrKey(), JSON.stringify(savedAddresses)); } catch {}
+  }
+  renderSavedAddrDropdown();
+  renderAccountSavedAddresses();
+  toast('Address saved');
+}
+
+async function deleteSavedAddress(id) {
+  if (sb && sbUser && !String(id).startsWith('sa-')) {
+    try { await sb.from('customer_saved_addresses').delete().eq('id', id); }
+    catch (e) { console.warn('[Supabase] delete address:', e); }
+  }
+  savedAddresses = savedAddresses.filter(a => String(a.id) !== String(id));
+  if (!(sb && sbUser)) {
+    try { localStorage.setItem(_savedAddrKey(), JSON.stringify(savedAddresses)); } catch {}
+  }
+  renderSavedAddrDropdown();
+  renderAccountSavedAddresses();
+}
+
+/* Stub — fully rendered by the Account settings page (feature 30). */
+function renderAccountSavedAddresses() {
+  const host = document.getElementById('acct-saved-addr-list');
+  if (!host) return;
+  if (savedAddresses.length === 0) {
+    host.innerHTML = '<div style="font-size:10px;color:#aaa;">No saved addresses yet.</div>';
+    return;
+  }
+  host.innerHTML = savedAddresses.map(a => `
+    <div class="acct-addr-row">
+      <div><strong>${escapeHTML(a.label)}</strong><div style="font-size:9px;color:#999;">${escapeHTML(a.address)}</div></div>
+      <button class="btn btn-ghost btn-sm" onclick="deleteSavedAddress('${a.id}')">Remove</button>
+    </div>`).join('');
+}
 
 /* ================================================================
    LEAFLET MAP — notary home address (signup form)
