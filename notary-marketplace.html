@@ -1948,6 +1948,40 @@
   </div>
 
   <!-- ============================================================
+       PROOF-OF-COMPLETION MODAL — notary uploads a photo on completion
+       ============================================================ -->
+  <div class="overlay" id="proof-overlay">
+    <div class="modal" style="width:360px;max-width:360px;">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title">Mark job complete</div>
+          <div class="modal-sub">Upload a photo of the signed documents (optional but recommended).</div>
+        </div>
+        <button class="modal-close" onclick="closeProofModal()">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div class="field" id="proof-field">
+          <label class="field-label">Proof photo <span style="color:#ccc;font-weight:400;">(JPG or PNG, max 10MB)</span></label>
+          <div class="file-upload-wrap">
+            <label class="file-upload-label">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span id="proof-btn-text">Choose photo…</span>
+              <input type="file" id="proof-file" accept=".jpg,.jpeg,.png" onchange="onProofFileChange(this)">
+            </label>
+            <div class="file-selected-name" id="proof-file-name" style="display:none;"></div>
+            <div class="upload-progress" id="proof-progress"></div>
+          </div>
+          <div style="font-size:9px;color:#aaa;margin-top:6px;">A photo reassures the customer the job was done right.</div>
+        </div>
+      </div>
+      <div class="modal-foot" style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="submitProof(true)">Skip &amp; complete</button>
+        <button class="btn btn-primary btn-sm" style="flex:1;" id="proof-submit" onclick="submitProof(false)">Upload &amp; complete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
        REVIEW MODAL — opened after customer marks a job complete
        ============================================================ -->
   <div class="overlay" id="review-overlay">
@@ -3239,6 +3273,9 @@ function renderConfirmedCard(bid, job) {
         ${job.signedDocumentFilePath
           ? `<button class="btn btn-ghost btn-sm" onclick="openSignedUrl('job-documents','${job.signedDocumentFilePath}')">Download signed doc</button>`
           : ''}
+        ${job.proofPhotoPath
+          ? `<button class="btn btn-ghost btn-sm" onclick="openSignedUrl('job-documents','${job.proofPhotoPath}')">View proof</button>`
+          : ''}
         ${job.status === 'accepted'
           ? `<button class="btn btn-ghost btn-sm" style="color:var(--accent-red)" onclick="cancelUserJob()">Cancel job</button>`
           : ''}
@@ -3996,6 +4033,16 @@ function renderMyBidsList() {
                <button class="btn btn-ghost btn-sm" onclick="cancelBid('${b.id}')">Withdraw bid</button>
              </div>`
           : ''}
+        ${b.status === 'accepted' && job && job.status === 'accepted'
+          ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);">
+               <button class="btn btn-primary btn-sm" onclick="notaryMarkComplete('${job.id}')">Mark complete + proof</button>
+             </div>`
+          : ''}
+        ${b.status === 'accepted' && job && job.status === 'completed' && job.proofPhotoPath
+          ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);">
+               <button class="btn btn-ghost btn-sm" onclick="openSignedUrl('job-documents','${job.proofPhotoPath}')">View proof</button>
+             </div>`
+          : ''}
       </div>
     `;
   }).join('');
@@ -4675,6 +4722,8 @@ function rowToJob(row) {
     acceptedBidId:         row.accepted_bid_id || null,
     documentFilePath:      row.document_file_path || null,
     signedDocumentFilePath: row.signed_document_file_path || null,
+    proofPhotoPath:        row.proof_photo_path || null,
+    proofUploadedAt:       row.proof_uploaded_at ? new Date(row.proof_uploaded_at).getTime() : null,
     customerId:            row.customer_id || null,
     postedAt:              new Date(row.created_at).getTime(),
     isUserJob:             row.customer_id === (sbUser?.id || '__nobody__')
@@ -4942,6 +4991,97 @@ async function sbCompleteJob(jobId) {
     });
     openReviewModal(jobId, acceptedBid.notaryId, acceptedBid.notaryName);
   }
+}
+
+/* ================================================================
+   PROOF OF COMPLETION — notary uploads a photo when completing a job
+   ================================================================ */
+let _proofJobId = null;
+let selectedProofFile = null;
+
+function notaryMarkComplete(jobId) {
+  _proofJobId = jobId;
+  selectedProofFile = null;
+  const nameEl = document.getElementById('proof-file-name');
+  if (nameEl) { nameEl.style.display = 'none'; nameEl.textContent = ''; }
+  const btnText = document.getElementById('proof-btn-text');
+  if (btnText) btnText.textContent = 'Choose photo…';
+  const prog = document.getElementById('proof-progress');
+  if (prog) { prog.textContent = ''; prog.className = 'upload-progress'; }
+  const fileInput = document.getElementById('proof-file');
+  if (fileInput) fileInput.value = '';
+  document.getElementById('proof-overlay').classList.add('open');
+}
+
+function closeProofModal() {
+  document.getElementById('proof-overlay').classList.remove('open');
+  _proofJobId = null;
+}
+
+function onProofFileChange(input) {
+  const file = input.files[0];
+  const nameEl = document.getElementById('proof-file-name');
+  const prog = document.getElementById('proof-progress');
+  if (!file) { selectedProofFile = null; nameEl.style.display = 'none'; return; }
+  if (!ALLOWED_MIME.has(file.type)) {
+    prog.textContent = 'Only JPG or PNG allowed.';
+    prog.className = 'upload-progress error';
+    input.value = ''; selectedProofFile = null; return;
+  }
+  selectedProofFile = file;
+  nameEl.textContent = file.name;
+  nameEl.style.display = 'block';
+  prog.textContent = '';
+  prog.className = 'upload-progress';
+}
+
+async function submitProof(skip) {
+  const jobId = _proofJobId;
+  const job = STATE.jobs.find(j => j.id === jobId);
+  if (!job) { closeProofModal(); return; }
+
+  let proofPath = null;
+  if (!skip && selectedProofFile && sb && sbUser) {
+    const prog = document.getElementById('proof-progress');
+    const ext = selectedProofFile.name.split('.').pop().toLowerCase();
+    const { path, error } = await uploadFile(
+      'job-documents', `${jobId}/proof.${ext}`, selectedProofFile,
+      msg => { if (prog) prog.textContent = msg; }
+    );
+    if (error) {
+      if (prog) { prog.textContent = error.message; prog.className = 'upload-progress error'; }
+      return;
+    }
+    proofPath = path;
+  }
+
+  job.status = 'completed';
+  if (proofPath) {
+    job.proofPhotoPath = proofPath;
+    job.proofUploadedAt = Date.now();
+  }
+  saveState();
+
+  if (sb && sbUser) {
+    try {
+      const patch = { status: 'completed' };
+      if (proofPath) { patch.proof_photo_path = proofPath; patch.proof_uploaded_at = new Date().toISOString(); }
+      await sb.from('jobs').update(patch).eq('id', jobId);
+    } catch (e) { console.warn('[Supabase] notary complete:', e); }
+  }
+
+  if (job.customerId && job.customerId !== sbUser?.id) {
+    sbCreateNotification?.({
+      userId: job.customerId, type: 'job_completed',
+      title: 'Job completed', body: 'Your notary marked the job complete' + (proofPath ? ' and uploaded proof.' : '.'),
+      link_target: 'my-job'
+    });
+  }
+
+  closeProofModal();
+  toast('Job marked complete');
+  if (typeof renderMyBids === 'function') renderMyBids();
+  if (typeof renderDashboard === 'function') renderDashboard();
 }
 
 /* INSERT a review — DB trigger handles rating recalculation */
