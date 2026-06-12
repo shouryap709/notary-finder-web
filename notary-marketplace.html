@@ -288,6 +288,14 @@
   .urgency-badge.urgent  { background: #fbe0e0; color: #b02e2e; }
   .urgency-badge.standard { background: #f0f0f0; color: #888; }
 
+  /* Report / Block links in profile modal */
+  .pm-report {
+    background: none; border: none; cursor: pointer; padding: 0;
+    font-family: 'DM Sans',sans-serif; font-size: 9.5px; color: #aaa;
+    text-decoration: underline; text-decoration-color: #ddd; transition: color .14s;
+  }
+  .pm-report:hover { color: var(--accent-red); text-decoration-color: var(--accent-red); }
+
   /* Help link in header */
   .help-link {
     background: none; border: none; cursor: pointer;
@@ -1980,6 +1988,62 @@
   </div>
 
   <!-- ============================================================
+       REPORT USER MODAL
+       ============================================================ -->
+  <div class="overlay" id="report-overlay">
+    <div class="modal" style="width:360px;max-width:360px;">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title">Report user</div>
+          <div class="modal-sub" id="report-sub">—</div>
+        </div>
+        <button class="modal-close" onclick="closeReportModal()">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label" for="report-reason">Reason</label>
+          <select id="report-reason" class="field-select">
+            <option value="Inappropriate behavior">Inappropriate behavior</option>
+            <option value="Suspected fraud">Suspected fraud</option>
+            <option value="No-show">No-show</option>
+            <option value="Spam">Spam</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label class="field-label" for="report-details">Details <span style="color:#ccc;font-weight:400;">(optional)</span></label>
+          <textarea id="report-details" class="field-textarea" placeholder="What happened?"></textarea>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" style="width:100%;" onclick="submitReport()">Submit report</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       BLOCK USER CONFIRM MODAL
+       ============================================================ -->
+  <div class="overlay" id="block-overlay">
+    <div class="modal" style="width:340px;max-width:340px;">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title">Block user</div>
+          <div class="modal-sub" id="block-sub">—</div>
+        </div>
+        <button class="modal-close" onclick="closeBlockModal()">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:10px;color:#555;line-height:1.6;margin:0;">You won’t see jobs or bids from this user going forward. You can’t undo this from the app yet.</p>
+      </div>
+      <div class="modal-foot" style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="closeBlockModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" style="flex:1;background:var(--accent-red);" onclick="confirmBlockSubmit()">Block</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
        HELP / FAQ MODAL — searchable accordion
        ============================================================ -->
   <div class="overlay" id="help-overlay">
@@ -3233,7 +3297,7 @@ function renderCustomerStats() {
 }
 
 function renderLiveBids(bids, job, newBidId = null) {
-  bids = bids.filter(b => b.status === 'pending');
+  bids = bids.filter(b => b.status === 'pending' && !isBlocked(b.notaryId));
   if (bids.length === 0) {
     return `
       <div class="section-label">Live bids <span class="count">waiting…</span></div>
@@ -3689,7 +3753,7 @@ function renderDashboard() {
 
   // Attach computed distance to each open job object (non-mutating)
   let openJobs = STATE.jobs
-    .filter(j => j.status === 'open')
+    .filter(j => j.status === 'open' && !isBlocked(j.customerId))
     .map(j => Object.assign({}, j, {
       _distMi: (hasHome && j.locationLat != null && j.locationLng != null)
         ? haversineMiles(homeLat, homeLng, j.locationLat, j.locationLng)
@@ -4085,8 +4149,10 @@ function renderMyBidsList() {
              </div>`
           : ''}
         ${b.status === 'accepted' && job && job.status === 'accepted'
-          ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);">
+          ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);display:flex;gap:10px;align-items:center;">
                <button class="btn btn-primary btn-sm" onclick="notaryMarkComplete('${job.id}')">Mark complete + proof</button>
+               ${job.customerId ? `<button class="pm-report" onclick="openReportModal('${job.customerId}')">Report</button>
+               <button class="pm-report" onclick="openBlockModal('${job.customerId}')">Block</button>` : ''}
              </div>`
           : ''}
         ${b.status === 'accepted' && job && job.status === 'completed' && job.proofPhotoPath
@@ -5204,6 +5270,85 @@ function closeHelp() {
   document.getElementById('help-overlay').classList.remove('open');
 }
 
+/* ================================================================
+   REPORT + BLOCK USER
+   ================================================================ */
+let blockedUserIds = new Set();
+let _reportTargetId = null;
+let _blockTargetId = null;
+
+function _blocksKey() { return 'nf_blocks_' + (sbUser?.id || 'local'); }
+
+async function sbLoadBlocks() {
+  if (sb && sbUser) {
+    try {
+      const { data, error } = await sb.from('user_blocks')
+        .select('blocked_id').eq('blocker_id', sbUser.id);
+      if (error) throw error;
+      blockedUserIds = new Set((data || []).map(r => r.blocked_id));
+      return blockedUserIds;
+    } catch (e) { console.warn('[Supabase] load blocks:', e); }
+  }
+  try { blockedUserIds = new Set(JSON.parse(localStorage.getItem(_blocksKey()) || '[]')); }
+  catch { blockedUserIds = new Set(); }
+  return blockedUserIds;
+}
+
+function isBlocked(userId) { return blockedUserIds.has(userId); }
+
+function openReportModal(targetId) {
+  _reportTargetId = targetId;
+  document.getElementById('report-sub').textContent = 'Reporting ' + displayNameForUser(targetId);
+  document.getElementById('report-reason').selectedIndex = 0;
+  document.getElementById('report-details').value = '';
+  document.getElementById('report-overlay').classList.add('open');
+}
+function closeReportModal() {
+  document.getElementById('report-overlay').classList.remove('open');
+  _reportTargetId = null;
+}
+async function submitReport() {
+  const reason = document.getElementById('report-reason').value;
+  const details = document.getElementById('report-details').value.trim();
+  if (sb && sbUser && _reportTargetId) {
+    try {
+      await sb.from('user_reports').insert({
+        reporter_id: sbUser.id, reported_id: _reportTargetId,
+        reason, details: details || null
+      });
+    } catch (e) { console.warn('[Supabase] report:', e); }
+  }
+  closeReportModal();
+  toast('Report submitted — thank you');
+}
+
+function openBlockModal(targetId) {
+  _blockTargetId = targetId;
+  document.getElementById('block-sub').textContent = 'Block ' + displayNameForUser(targetId) + '?';
+  document.getElementById('block-overlay').classList.add('open');
+}
+function closeBlockModal() {
+  document.getElementById('block-overlay').classList.remove('open');
+  _blockTargetId = null;
+}
+async function confirmBlockSubmit() {
+  const targetId = _blockTargetId;
+  if (!targetId) return;
+  blockedUserIds.add(targetId);
+  if (sb && sbUser) {
+    try {
+      await sb.from('user_blocks').insert({ blocker_id: sbUser.id, blocked_id: targetId });
+    } catch (e) { console.warn('[Supabase] block:', e); }
+  } else {
+    try { localStorage.setItem(_blocksKey(), JSON.stringify([...blockedUserIds])); } catch {}
+  }
+  closeBlockModal();
+  closeNotaryProfile?.();
+  toast('User blocked');
+  if (typeof renderMyJob === 'function') renderMyJob();
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+
 /* INSERT a review — DB trigger handles rating recalculation */
 async function sbSaveReview({ jobId, notaryId, rating, comment }) {
   if (!sb || !sbUser) return;
@@ -5891,7 +6036,23 @@ function renderNotaryProfileContent({ profile: p, recentReviews, completedJobs }
             <div style="font-size:8.5px;color:#aaa;">— ${escapeHTML(r.customerName || 'Customer')}</div>
           </div>`).join('')
     }
+
+    <div style="display:flex;gap:16px;margin-top:18px;padding-top:12px;border-top:1px solid var(--line-soft);">
+      <button class="pm-report" onclick="openReportModal('${p.id}')">Report</button>
+      <button class="pm-report" onclick="openBlockModal('${p.id}')">Block</button>
+    </div>
   `;
+}
+
+/* Resolve a display name for any user id we know about. */
+function displayNameForUser(userId) {
+  const n = STATE.notaries.find(x => x.id === userId);
+  if (n) return n.name;
+  const bid = STATE.bids.find(b => b.notaryId === userId);
+  if (bid) return bid.notaryName;
+  const job = STATE.jobs.find(j => j.customerId === userId);
+  if (job) return job.customerName || 'this customer';
+  return 'this user';
 }
 
 /* ================================================================
@@ -5989,6 +6150,9 @@ document.addEventListener('click', e => {
     btn.classList.toggle('on', btn.dataset.mode === 'customer');
   });
   goTo('home');
+
+  sbLoadBlocks();
+  sbLoadSavedAddresses();
 
   // Hydrate from Supabase in the background — doesn't block the UI.
   // On success, re-render whatever page is currently active.
