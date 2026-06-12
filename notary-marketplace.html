@@ -2714,12 +2714,60 @@ function pickMessage(job) {
 /* ================================================================
    MY JOB — render the customer's job + live bids
    ================================================================ */
+let myJobTab = 'active';
+
+function setMyJobTab(tab) {
+  myJobTab = tab;
+  renderMyJob();
+}
+
 function renderMyJob(opts = {}) {
   const root = document.getElementById('my-job-content');
+
+  const userJobs = STATE.jobs.filter(j => j.isUserJob);
+  const pastJobs = userJobs.filter(j => j.status === 'completed' || j.status === 'cancelled');
+
+  const tabBar = `
+    <div class="tabs" id="myjob-tabs">
+      <button class="tab-btn ${myJobTab === 'active' ? 'active' : ''}" onclick="setMyJobTab('active')">Active</button>
+      <button class="tab-btn ${myJobTab === 'past' ? 'active' : ''}" onclick="setMyJobTab('past')">Past <span class="badge">${pastJobs.length}</span></button>
+      <button class="tab-btn ${myJobTab === 'stats' ? 'active' : ''}" onclick="setMyJobTab('stats')">Stats</button>
+    </div>`;
+
+  if (myJobTab === 'past')  { root.innerHTML = tabBar + renderCustomerPastJobs(pastJobs); return; }
+  if (myJobTab === 'stats') { root.innerHTML = tabBar + renderCustomerStats(); return; }
+
+  root.innerHTML = tabBar + renderActiveJobTab(opts);
+}
+
+function renderCustomerPastJobs(jobs) {
+  if (jobs.length === 0) {
+    return `<div class="empty-state"><div class="es-title">No past jobs yet.</div>
+      <div class="es-sub">Completed and cancelled jobs will appear here.</div></div>`;
+  }
+  return jobs.sort((a, b) => b.postedAt - a.postedAt).map(j => {
+    const ab = j.acceptedBidId ? STATE.bids.find(b => b.id === j.acceptedBidId) : null;
+    const done = j.status === 'completed';
+    return `<div class="mybid-card">
+      <div class="mybid-row">
+        <div class="mybid-info">
+          <div class="mybid-title">${jobServiceLabel(j)}</div>
+          <div class="mybid-meta">${j.location} · ${formatDateTime(j.dateTime)}${ab ? ' · ' + escapeHTML(ab.notaryName) : ''}</div>
+        </div>
+        <div class="mybid-right">
+          <div class="mybid-price">${ab ? '$' + ab.price : '—'}</div>
+          <div class="mybid-status ${done ? 'status-accepted' : 'status-cancelled'}">${done ? 'Completed' : 'Cancelled'}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderActiveJobTab(opts = {}) {
   const job = findUserJob();
 
   if (!job) {
-    root.innerHTML = `
+    return `
       <div class="empty-state">
         <div class="es-title">You haven't posted a job yet.</div>
         <div class="es-sub">Post a job and notaries will start bidding within minutes.</div>
@@ -2728,7 +2776,6 @@ function renderMyJob(opts = {}) {
         </div>
       </div>
     `;
-    return;
   }
 
   const bids = bidsForJob(job.id);
@@ -2798,7 +2845,121 @@ function renderMyJob(opts = {}) {
       ? renderConfirmedCard(acceptedBid, job)
       : renderLiveBids(bids, job, opts.newBidId || null);
 
-  root.innerHTML = statusBanner + summaryHTML + bidsSection;
+  return statusBanner + summaryHTML + bidsSection;
+}
+
+/* ================================================================
+   SPENDING / EARNINGS CHARTS — inline SVG, no libraries
+   ================================================================ */
+function last12Months() {
+  const out = [];
+  const d = new Date();
+  d.setDate(1);
+  for (let i = 11; i >= 0; i--) {
+    const m = new Date(d.getFullYear(), d.getMonth() - i, 1);
+    out.push({
+      key: m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0'),
+      label: m.toLocaleString([], { month: 'short' }),
+      full: m.toLocaleString([], { month: 'long', year: 'numeric' })
+    });
+  }
+  return out;
+}
+
+function jobMonthKey(job) {
+  const t = job.dateTime ? new Date(job.dateTime) : new Date(job.postedAt);
+  return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0');
+}
+
+/* Generic SVG chart. type = 'line' | 'bar'. values aligned to months. */
+function svgChart(months, values, type) {
+  const W = 320, H = 120, padL = 8, padR = 8, padT = 12, padB = 20;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const max = Math.max(1, ...values);
+  const stepX = innerW / (months.length - 1 || 1);
+  const x = i => padL + i * stepX;
+  const y = v => padT + innerH - (v / max) * innerH;
+
+  let body = '';
+  if (type === 'line') {
+    const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    body += `<polyline points="${pts}" fill="none" stroke="var(--ink, #000)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+    body += values.map((v, i) =>
+      `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${v ? 2.6 : 1.6}" fill="#fff" stroke="var(--ink,#000)" stroke-width="1.4"><title>${months[i].full}: $${v}</title></circle>`
+    ).join('');
+  } else {
+    const bw = Math.min(18, (innerW / months.length) * 0.6);
+    body += months.map((m, i) => {
+      const bx = padL + i * (innerW / months.length) + (innerW / months.length - bw) / 2;
+      const bh = (values[i] / max) * innerH;
+      const by = padT + innerH - bh;
+      return `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" rx="2" fill="${values[i] ? 'var(--ink,#000)' : '#e6e6e6'}"><title>${m.full}: $${values[i]}</title></rect>`;
+    }).join('');
+  }
+  // x labels — every other month to avoid crowding
+  const labels = months.map((m, i) =>
+    (i % 2 === 0) ? `<text x="${x(i).toFixed(1)}" y="${H - 6}" font-size="6.5" fill="#aaa" text-anchor="middle">${m.label}</text>` : ''
+  ).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;">${body}${labels}</svg>`;
+}
+
+function statTile(label, value, sub) {
+  return `<div class="pm-stat" style="text-align:left;">
+    <div class="pm-stat-lbl">${label}</div>
+    <div class="pm-stat-val" style="font-size:15px;">${value}</div>
+    ${sub ? `<div style="font-size:8.5px;color:#aaa;margin-top:2px;">${sub}</div>` : ''}
+  </div>`;
+}
+
+function renderCustomerStats() {
+  const jobs = STATE.jobs.filter(j => j.isUserJob && j.status === 'completed' && j.acceptedBidId);
+  if (jobs.length === 0) {
+    return `<div class="empty-state"><div class="es-title">No spending yet.</div>
+      <div class="es-sub">Complete a job and your spending insights will appear here.</div></div>`;
+  }
+
+  const priceOf = j => {
+    const b = STATE.bids.find(x => x.id === j.acceptedBidId);
+    return b ? b.price : 0;
+  };
+  const months = last12Months();
+  const byMonth = Object.fromEntries(months.map(m => [m.key, 0]));
+  let total = 0;
+  const svcCount = {}, notaryCount = {};
+  jobs.forEach(j => {
+    const p = priceOf(j);
+    total += p;
+    const k = jobMonthKey(j);
+    if (k in byMonth) byMonth[k] += p;
+    jobServices(j).forEach(s => { svcCount[s] = (svcCount[s] || 0) + 1; });
+    const b = STATE.bids.find(x => x.id === j.acceptedBidId);
+    if (b) notaryCount[b.notaryId] = notaryCount[b.notaryId] || { name: b.notaryName, n: 0 };
+    if (b) notaryCount[b.notaryId].n++;
+  });
+  const values = months.map(m => byMonth[m.key]);
+  const avg = Math.round(total / jobs.length);
+  const topSvc = Object.entries(svcCount).sort((a, b) => b[1] - a[1])[0];
+  const topNotaryEntry = Object.entries(notaryCount).sort((a, b) => b[1].n - a[1].n)[0];
+
+  return `
+    <div class="section-label">Monthly spending · last 12 months</div>
+    <div class="card" style="padding:12px 12px 6px;margin-bottom:14px;">${svgChart(months, values, 'line')}</div>
+    <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:6px;">Lifetime</div>
+    <div style="font-size:30px;font-weight:600;letter-spacing:-1px;margin-bottom:14px;">$${total.toLocaleString()}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      ${statTile('Average per job', '$' + avg)}
+      ${statTile('Jobs completed', jobs.length)}
+      ${statTile('Most-used service', topSvc ? topSvc[0] : '—', topSvc ? topSvc[1] + ' job' + (topSvc[1] !== 1 ? 's' : '') : '')}
+      ${topNotaryEntry
+        ? `<div class="pm-stat" style="text-align:left;">
+             <div class="pm-stat-lbl">Most-hired notary</div>
+             <div class="pm-stat-val" style="font-size:13px;"><button class="np-link" onclick="openNotaryProfile('${topNotaryEntry[0]}')">${escapeHTML(topNotaryEntry[1].name)}</button></div>
+             <div style="font-size:8.5px;color:#aaa;margin-top:2px;">${topNotaryEntry[1].n} job${topNotaryEntry[1].n !== 1 ? 's' : ''}</div>
+           </div>`
+        : statTile('Most-hired notary', '—')}
+    </div>
+  `;
 }
 
 function renderLiveBids(bids, job, newBidId = null) {
