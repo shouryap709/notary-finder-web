@@ -288,6 +288,32 @@
   .urgency-badge.urgent  { background: #fbe0e0; color: #b02e2e; }
   .urgency-badge.standard { background: #f0f0f0; color: #888; }
 
+  /* Help link in header */
+  .help-link {
+    background: none; border: none; cursor: pointer;
+    font-family: 'DM Sans',sans-serif; font-size: 10px; font-weight: 500;
+    color: #888; padding: 4px 6px; border-radius: 4px; flex-shrink: 0;
+    transition: background .15s, color .15s;
+  }
+  .help-link:hover { background: #f4f4f4; color: #000; }
+
+  /* FAQ accordion */
+  .faq-item { border-bottom: 1px solid var(--line-soft); }
+  .faq-q {
+    width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+    font-family: 'DM Sans',sans-serif; font-size: 11px; font-weight: 500; color: #000;
+    padding: 11px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  }
+  .faq-q:hover { color: #000; }
+  .faq-q .faq-chev { color: #bbb; font-size: 11px; transition: transform .18s; flex-shrink: 0; }
+  .faq-item.open .faq-q .faq-chev { transform: rotate(90deg); }
+  .faq-a {
+    font-size: 10px; color: #666; line-height: 1.6; padding: 0 0 11px;
+    display: none;
+  }
+  .faq-item.open .faq-a { display: block; }
+  .faq-empty { text-align: center; color: #aaa; font-size: 10px; padding: 24px 0; }
+
   /* Notary calendar view */
   .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
   .cal-month { font-size: 13px; font-weight: 600; color: #000; letter-spacing: -.3px; }
@@ -1316,6 +1342,7 @@
         <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
       </nav>
+      <button class="help-link" onclick="openHelp()" title="Help">Help</button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle" id="mode-toggle">
         <button data-mode="customer" class="on">Customer</button>
@@ -1371,6 +1398,7 @@
         <button class="nav-btn active" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
       </nav>
+      <button class="help-link" onclick="openHelp()" title="Help">Help</button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer" class="on">Customer</button>
@@ -1642,6 +1670,7 @@
         <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn active" onclick="goTo('my-job')">My Jobs</button>
       </nav>
+      <button class="help-link" onclick="openHelp()" title="Help">Help</button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer" class="on">Customer</button>
@@ -1666,6 +1695,7 @@
         <button class="nav-btn" onclick="goTo('my-bids')">My Bids</button>
       </nav>
       <button class="notary-pill" id="notary-pill-dashboard" onclick="signOutNotary()"></button>
+      <button class="help-link" onclick="openHelp()" title="Help">Help</button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer">Customer</button>
@@ -1743,6 +1773,7 @@
         <button class="nav-btn active" onclick="goTo('my-bids')">My Bids</button>
       </nav>
       <button class="notary-pill" id="notary-pill-bids" onclick="signOutNotary()"></button>
+      <button class="help-link" onclick="openHelp()" title="Help">Help</button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer">Customer</button>
@@ -1776,6 +1807,7 @@
       <nav class="nav" data-mode-nav="notary">
         <button class="nav-btn active">Sign In</button>
       </nav>
+      <button class="help-link" onclick="openHelp()" title="Help">Help</button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer">Customer</button>
@@ -1944,6 +1976,25 @@
       <div class="modal-foot">
         <button class="btn btn-primary" style="width:100%;" onclick="submitCounter()">Send counter-offer</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       HELP / FAQ MODAL — searchable accordion
+       ============================================================ -->
+  <div class="overlay" id="help-overlay">
+    <div class="modal" style="width:400px;max-width:400px;height:480px;">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title">Help center</div>
+          <div class="modal-sub">Answers to common questions</div>
+        </div>
+        <button class="modal-close" onclick="closeHelp()">&#x2715;</button>
+      </div>
+      <div style="padding:12px 18px 0;">
+        <input type="text" id="help-search" class="field-input" placeholder="Search help…" oninput="filterFaq(this.value)" autocomplete="off">
+      </div>
+      <div class="modal-body" id="help-list" style="padding-top:12px;"></div>
     </div>
   </div>
 
@@ -5082,6 +5133,75 @@ async function submitProof(skip) {
   toast('Job marked complete');
   if (typeof renderMyBids === 'function') renderMyBids();
   if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+/* ================================================================
+   HELP CENTER / FAQ
+   ================================================================ */
+const FAQ_DATA = [
+  { q: 'How does bidding work?',
+    a: 'Post a job with a starting price (your maximum). Verified notaries nearby place competing bids at or below it. You review each notary’s price, rating, and distance, then accept the bid that works best for you.' },
+  { q: 'What’s the difference between mobile and in-office?',
+    a: 'A mobile notary travels to your home, office, or another location you choose (usually for a small travel premium). In-office means you go to the notary’s location. Choose "Either" to see bids for both.' },
+  { q: 'How do I get my notary commission verified?',
+    a: 'When you sign up as a notary, upload a photo of your commission certificate. Our team reviews it, and once approved you’ll get a verified badge on your profile that customers can see.' },
+  { q: 'What if I need to cancel?',
+    a: 'Open the job from "My Jobs" and tap "Cancel job". If a notary was already confirmed, they’ll be notified automatically. Try to cancel as early as possible out of courtesy to the notary.' },
+  { q: 'How does payment work?',
+    a: 'Payments are coming soon — for now, exchange directly with your notary at the appointment (cash, card, or app of your choice). The bid price you accept is the agreed amount.' },
+  { q: 'What documents need notarization?',
+    a: 'Common ones include real-estate and loan documents, powers of attorney, affidavits, deeds, and consent forms. If a document has a notary block or asks for an acknowledgment/jurat, it needs notarization.' },
+  { q: 'Is my information secure?',
+    a: 'Yes. Your data is stored securely and only shared with a notary after you accept their bid. Uploaded documents are kept private and accessed through short-lived secure links.' },
+  { q: 'Apostille vs notarization — what’s the difference?',
+    a: 'Notarization verifies a signer’s identity on a document. An apostille is an additional certification that authenticates a document for international use under the Hague Convention. Some documents need both.' },
+  { q: 'Loan signing — what do I need to bring?',
+    a: 'Bring a valid government-issued photo ID for every signer, and make sure all signers are present. The notary brings the loan package; don’t sign or date anything in advance.' }
+];
+
+function renderFaq(filter = '') {
+  const list = document.getElementById('help-list');
+  if (!list) return;
+  const f = filter.trim().toLowerCase();
+  const items = FAQ_DATA
+    .map((item, i) => ({ ...item, i }))
+    .filter(item => !f || item.q.toLowerCase().includes(f) || item.a.toLowerCase().includes(f));
+  if (items.length === 0) {
+    list.innerHTML = '<div class="faq-empty">No results. Try different keywords.</div>';
+    return;
+  }
+  list.innerHTML = items.map(item => `
+    <div class="faq-item" id="faq-${item.i}">
+      <button class="faq-q" onclick="toggleFaq(${item.i})">
+        <span>${escapeHTML(item.q)}</span><span class="faq-chev">›</span>
+      </button>
+      <div class="faq-a">${escapeHTML(item.a)}</div>
+    </div>`).join('');
+}
+
+function toggleFaq(i) {
+  document.getElementById('faq-' + i)?.classList.toggle('open');
+}
+
+function filterFaq(val) {
+  renderFaq(val);
+  // Auto-expand when a search narrows to a single hit.
+  const f = (val || '').trim();
+  if (f) {
+    const open = document.querySelectorAll('#help-list .faq-item');
+    if (open.length <= 2) open.forEach(el => el.classList.add('open'));
+  }
+}
+
+function openHelp() {
+  document.getElementById('help-search').value = '';
+  renderFaq('');
+  document.getElementById('help-overlay').classList.add('open');
+  closeNotifPanel?.();
+}
+
+function closeHelp() {
+  document.getElementById('help-overlay').classList.remove('open');
 }
 
 /* INSERT a review — DB trigger handles rating recalculation */
