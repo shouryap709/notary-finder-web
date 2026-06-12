@@ -288,6 +288,29 @@
   .urgency-badge.urgent  { background: #fbe0e0; color: #b02e2e; }
   .urgency-badge.standard { background: #f0f0f0; color: #888; }
 
+  /* Account settings page */
+  .acct-shell { max-width: 520px; margin: 0 auto; padding: 24px 22px 60px; }
+  .acct-section {
+    background: var(--surface, #fff); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; margin-bottom: 14px;
+  }
+  .acct-section-title { font-size: 12px; font-weight: 600; color: #000; letter-spacing: -.2px; margin-bottom: 12px; }
+  .acct-section.danger { border-color: #f0d2d2; }
+  .acct-section.danger .acct-section-title { color: var(--accent-red); }
+  .acct-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .acct-toggle-text { font-size: 10.5px; color: #555; line-height: 1.5; }
+  .switch { position: relative; width: 36px; height: 20px; flex-shrink: 0; cursor: pointer; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider {
+    position: absolute; inset: 0; background: #ddd; border-radius: 20px; transition: background .18s;
+  }
+  .switch .slider::before {
+    content: ''; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px;
+    background: #fff; border-radius: 50%; transition: transform .18s; box-shadow: 0 1px 2px rgba(0,0,0,.2);
+  }
+  .switch input:checked + .slider { background: #000; }
+  .switch input:checked + .slider::before { transform: translateX(16px); }
+
   /* Report / Block links in profile modal */
   .pm-report {
     background: none; border: none; cursor: pointer; padding: 0;
@@ -1351,6 +1374,7 @@
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
       </nav>
       <button class="help-link" onclick="openHelp()" title="Help">Help</button>
+      <button class="help-link acct-link" onclick="goTo('account')" title="Account" style="display:none;">Account</button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle" id="mode-toggle">
         <button data-mode="customer" class="on">Customer</button>
@@ -1407,6 +1431,7 @@
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
       </nav>
       <button class="help-link" onclick="openHelp()" title="Help">Help</button>
+      <button class="help-link acct-link" onclick="goTo('account')" title="Account" style="display:none;">Account</button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer" class="on">Customer</button>
@@ -1679,6 +1704,7 @@
         <button class="nav-btn active" onclick="goTo('my-job')">My Jobs</button>
       </nav>
       <button class="help-link" onclick="openHelp()" title="Help">Help</button>
+      <button class="help-link acct-link" onclick="goTo('account')" title="Account" style="display:none;">Account</button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer" class="on">Customer</button>
@@ -1704,6 +1730,7 @@
       </nav>
       <button class="notary-pill" id="notary-pill-dashboard" onclick="signOutNotary()"></button>
       <button class="help-link" onclick="openHelp()" title="Help">Help</button>
+      <button class="help-link acct-link" onclick="goTo('account')" title="Account" style="display:none;">Account</button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer">Customer</button>
@@ -1782,6 +1809,7 @@
       </nav>
       <button class="notary-pill" id="notary-pill-bids" onclick="signOutNotary()"></button>
       <button class="help-link" onclick="openHelp()" title="Help">Help</button>
+      <button class="help-link acct-link" onclick="goTo('account')" title="Account" style="display:none;">Account</button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer">Customer</button>
@@ -1816,6 +1844,7 @@
         <button class="nav-btn active">Sign In</button>
       </nav>
       <button class="help-link" onclick="openHelp()" title="Help">Help</button>
+      <button class="help-link acct-link" onclick="goTo('account')" title="Account" style="display:none;">Account</button>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
         <button data-mode="customer">Customer</button>
@@ -1900,6 +1929,45 @@
   <!-- ============================================================
        BID MODAL — opens from the notary dashboard
        ============================================================ -->
+  <!-- ============================================================
+       PAGE: ACCOUNT SETTINGS
+       ============================================================ -->
+  <div class="page" id="account">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <button class="help-link" onclick="openHelp()" title="Help">Help</button>
+      <button class="help-link acct-link" onclick="goTo('account')" title="Account" style="display:none;">Account</button>
+      <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
+    </div>
+    <div class="acct-shell" id="account-content">
+      <!-- Rendered by renderAccount() -->
+    </div>
+  </div>
+
+  <!-- ============================================================
+       DELETE ACCOUNT CONFIRM MODAL
+       ============================================================ -->
+  <div class="overlay" id="delete-overlay">
+    <div class="modal" style="width:340px;max-width:340px;">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title">Delete account</div>
+          <div class="modal-sub">This can’t be undone.</div>
+        </div>
+        <button class="modal-close" onclick="closeDeleteModal()">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:10px;color:#555;line-height:1.6;margin:0 0 10px;">Type <strong>DELETE</strong> to permanently remove your account and data.</p>
+        <input type="text" id="delete-confirm-input" class="field-input" placeholder="DELETE" oninput="onDeleteInput(this.value)" autocomplete="off">
+      </div>
+      <div class="modal-foot" style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" style="flex:1;background:var(--accent-red);" id="delete-confirm-btn" disabled onclick="submitDeleteAccount()">Delete</button>
+      </div>
+    </div>
+  </div>
+
   <div class="overlay" id="bid-overlay">
     <div class="modal">
       <div class="modal-head">
@@ -2638,6 +2706,8 @@ function goTo(pageId) {
   if (pageId === 'notary-dashboard') { renderDashboard(); renderNotaryHeaderPill(); }
   if (pageId === 'my-bids') { renderMyBids(); renderNotaryHeaderPill(); }
   if (pageId === 'post-job') resetPostJobForm();
+  if (pageId === 'account') renderAccount();
+  updateAcctLinkVisibility();
 
   // Realtime lifecycle — subscribe for live updates.
   if (sb) {
@@ -5347,6 +5417,223 @@ async function confirmBlockSubmit() {
   toast('User blocked');
   if (typeof renderMyJob === 'function') renderMyJob();
   if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+/* ================================================================
+   ACCOUNT SETTINGS PAGE
+   ================================================================ */
+function isLoggedIn() {
+  return !!(sbUser || notarySession || (STATE.currentUser && STATE.currentUser.email));
+}
+
+function updateAcctLinkVisibility() {
+  const show = isLoggedIn();
+  document.querySelectorAll('.acct-link').forEach(el => {
+    el.style.display = show ? 'inline-block' : 'none';
+  });
+}
+
+function notifEnabled() {
+  return localStorage.getItem('nf_notif_enabled') !== '0';
+}
+
+function renderAccount() {
+  const root = document.getElementById('account-content');
+  if (!root) return;
+  const isNotary = STATE.currentMode === 'notary';
+  const name  = isNotary ? (notarySession?.name || '') : (STATE.currentUser?.name || '');
+  const email = isNotary ? (notarySession?.email || sbUser?.email || '') : (STATE.currentUser?.email || sbUser?.email || '');
+  const phone = (isNotary ? notarySession?.phone : STATE.currentUser?.phone) || '';
+
+  let html = `
+    <div class="page-title">Account</div>
+    <div class="page-subtitle">Manage your profile and preferences.</div>
+
+    <div class="acct-section">
+      <div class="acct-section-title">Profile</div>
+      <div class="field">
+        <label class="field-label" for="acct-name">Full name</label>
+        <input type="text" id="acct-name" class="field-input" value="${escapeHTML(name)}">
+      </div>
+      <div class="field">
+        <label class="field-label" for="acct-phone">Phone</label>
+        <input type="tel" id="acct-phone" class="field-input" value="${escapeHTML(phone)}" placeholder="(555) 555-5555">
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label class="field-label" for="acct-email">Email</label>
+        <input type="email" id="acct-email" class="field-input" value="${escapeHTML(email)}">
+        <div style="font-size:8.5px;color:#aaa;margin-top:4px;">Changing your email requires re-verification.</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="saveAccountProfile()">Save profile</button>
+    </div>
+
+    <div class="acct-section">
+      <div class="acct-section-title">Password</div>
+      <div class="field">
+        <label class="field-label" for="acct-pw-current">Current password</label>
+        <input type="password" id="acct-pw-current" class="field-input">
+      </div>
+      <div class="field">
+        <label class="field-label" for="acct-pw-new">New password</label>
+        <input type="password" id="acct-pw-new" class="field-input" placeholder="Min 6 characters">
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label class="field-label" for="acct-pw-confirm">Confirm new password</label>
+        <input type="password" id="acct-pw-confirm" class="field-input">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="changeAccountPassword()">Update password</button>
+    </div>
+
+    <div class="acct-section">
+      <div class="acct-section-title">Notifications</div>
+      <div class="acct-toggle">
+        <div class="acct-toggle-text">In-app notifications — alerts for bids, messages, and job updates.</div>
+        <label class="switch">
+          <input type="checkbox" id="acct-notif-toggle" ${notifEnabled() ? 'checked' : ''} onchange="toggleNotifPref(this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  `;
+
+  if (!isNotary) {
+    html += `
+      <div class="acct-section">
+        <div class="acct-section-title">Saved addresses</div>
+        <div id="acct-saved-addr-list"></div>
+        <div style="font-size:9px;color:#aaa;margin-top:8px;">Add new addresses from the post-a-job flow.</div>
+      </div>`;
+  } else {
+    html += `
+      <div class="acct-section">
+        <div class="acct-section-title">Home location &amp; travel</div>
+        <div class="field">
+          <label class="field-label" for="acct-home-address">Home / office address</label>
+          <input type="text" id="acct-home-address" class="field-input" value="${escapeHTML(notarySession?.homeAddress || '')}">
+        </div>
+        <div class="field" style="margin-bottom:12px;">
+          <label class="field-label" for="acct-max-travel">Max travel distance (miles)</label>
+          <input type="number" id="acct-max-travel" class="field-input" value="${notarySession?.maxTravelMi ?? 25}" min="1" max="200" style="max-width:120px;">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveAccountNotaryLocation()">Save location</button>
+      </div>`;
+  }
+
+  html += `
+    <div class="acct-section danger">
+      <div class="acct-section-title">Danger zone</div>
+      <div class="acct-toggle-text" style="margin-bottom:12px;">Permanently delete your account and all associated data.</div>
+      <button class="btn btn-secondary btn-sm" style="color:var(--accent-red);border-color:#f0d2d2;" onclick="openDeleteModal()">Delete account</button>
+    </div>
+  `;
+
+  root.innerHTML = html;
+  if (!isNotary) { sbLoadSavedAddresses(); }
+}
+
+async function saveAccountProfile() {
+  const name  = document.getElementById('acct-name').value.trim();
+  const phone = document.getElementById('acct-phone').value.trim();
+  const email = document.getElementById('acct-email').value.trim();
+
+  if (STATE.currentMode === 'notary' && notarySession) {
+    notarySession.name = name || notarySession.name;
+    notarySession.phone = phone;
+  } else {
+    STATE.currentUser = { ...(STATE.currentUser || {}), name, phone, email };
+    saveState();
+  }
+
+  if (sb && sbUser) {
+    try { await sb.from('profiles').update({ full_name: name, phone }).eq('id', sbUser.id); }
+    catch (e) { console.warn('[Supabase] save profile:', e); }
+    if (email && email !== sbUser.email) {
+      try {
+        const { error } = await sb.auth.updateUser({ email });
+        if (error) throw error;
+        toast('Verification email sent to ' + email);
+      } catch (e) { toast('Email change failed: ' + (e.message || 'try again')); }
+    }
+  }
+  toast('Profile saved');
+}
+
+async function changeAccountPassword() {
+  const cur = document.getElementById('acct-pw-current').value;
+  const nw  = document.getElementById('acct-pw-new').value;
+  const cf  = document.getElementById('acct-pw-confirm').value;
+  if (nw.length < 6) { toast('New password must be at least 6 characters'); return; }
+  if (nw !== cf) { toast('Passwords don’t match'); return; }
+  if (!sb || !sbUser) { toast('Sign in to change your password'); return; }
+  // Re-authenticate with the current password before updating.
+  try {
+    const { error: reauthErr } = await sb.auth.signInWithPassword({ email: sbUser.email, password: cur });
+    if (reauthErr) { toast('Current password is incorrect'); return; }
+    const { error } = await sb.auth.updateUser({ password: nw });
+    if (error) throw error;
+    document.getElementById('acct-pw-current').value = '';
+    document.getElementById('acct-pw-new').value = '';
+    document.getElementById('acct-pw-confirm').value = '';
+    toast('Password updated');
+  } catch (e) { toast('Password update failed: ' + (e.message || 'try again')); }
+}
+
+function toggleNotifPref(on) {
+  localStorage.setItem('nf_notif_enabled', on ? '1' : '0');
+  if (sb && sbUser) {
+    sb.from('profiles').update({ notifications_enabled: on }).eq('id', sbUser.id)
+      .then(({ error }) => { if (error) console.warn('[Supabase] notif pref:', error.message); });
+  }
+  toast(on ? 'Notifications on' : 'Notifications off');
+}
+
+async function saveAccountNotaryLocation() {
+  const addr = document.getElementById('acct-home-address').value.trim();
+  const maxMi = Math.max(1, parseInt(document.getElementById('acct-max-travel').value) || 25);
+  if (notarySession) {
+    notarySession.homeAddress = addr;
+    notarySession.maxTravelMi = maxMi;
+  }
+  if (sb && sbUser) {
+    try { await sb.from('profiles').update({ home_address: addr || null, max_travel_mi: maxMi }).eq('id', sbUser.id); }
+    catch (e) { console.warn('[Supabase] save notary location:', e); }
+  }
+  toast('Location saved');
+}
+
+/* ----- Delete account ----- */
+function openDeleteModal() {
+  document.getElementById('delete-confirm-input').value = '';
+  document.getElementById('delete-confirm-btn').disabled = true;
+  document.getElementById('delete-overlay').classList.add('open');
+}
+function closeDeleteModal() {
+  document.getElementById('delete-overlay').classList.remove('open');
+}
+function onDeleteInput(val) {
+  document.getElementById('delete-confirm-btn').disabled = (val.trim() !== 'DELETE');
+}
+async function submitDeleteAccount() {
+  // Account deletion requires elevated privileges (service-role), so it must
+  // run server-side. Wire this to a Supabase Edge Function when available.
+  // TODO: invoke Edge Function `delete-user` (calls supabase.auth.admin.deleteUser).
+  if (sb && sbUser) {
+    try {
+      const { error } = await sb.functions.invoke('delete-user');
+      if (error) throw error;
+      toast('Account deleted');
+      await sb.auth.signOut();
+      location.reload();
+      return;
+    } catch (e) {
+      console.warn('[Supabase] delete account:', e);
+      toast('Account deletion isn’t enabled yet — contact support.');
+      closeDeleteModal();
+      return;
+    }
+  }
+  toast('Account deletion isn’t enabled yet — contact support.');
+  closeDeleteModal();
 }
 
 /* INSERT a review — DB trigger handles rating recalculation */
