@@ -573,6 +573,12 @@
     background: #fafafa; border-radius: 6px;
     font-size: 9.5px; color: #555; line-height: 1.55; font-style: italic;
   }
+  .counter-note {
+    margin-top: 10px; padding: 8px 11px;
+    background: #fff8e8; border: 1px solid #f0e2bc; border-radius: 6px;
+    font-size: 9.5px; color: #8a6d1a; line-height: 1.5;
+  }
+  .counter-note strong { color: #6f5510; }
   .bid-actions {
     display: flex; align-items: center; gap: 8px;
     margin-top: 10px; padding-top: 9px;
@@ -1850,6 +1856,46 @@
   </div>
 
   <!-- ============================================================
+       COUNTER-OFFER MODAL — customer proposes a lower price to a notary
+       ============================================================ -->
+  <div class="overlay" id="counter-overlay">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title" id="cm-title">Counter-offer</div>
+          <div class="modal-sub" id="cm-sub">—</div>
+        </div>
+        <button class="modal-close" onclick="closeCounterModal()">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-summary">
+          <div class="modal-summary-row">
+            <span class="lbl">Their bid</span>
+            <span class="val" id="cm-orig">—</span>
+          </div>
+        </div>
+        <form id="counter-form" novalidate onsubmit="return submitCounter(event)">
+          <div class="field">
+            <label class="field-label" for="cm-price">Your counter price</label>
+            <div class="price-input-wrap">
+              <span>$</span>
+              <input type="number" id="cm-price" min="1" max="9999" required>
+            </div>
+            <div class="field-error" id="cm-price-error">Must be lower than their bid.</div>
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label class="field-label" for="cm-message">Message (optional)</label>
+            <textarea id="cm-message" class="field-textarea" placeholder="Explain your counter — e.g. budget, repeat customer…"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" style="width:100%;" onclick="submitCounter()">Send counter-offer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
        REVIEW MODAL — opened after customer marks a job complete
        ============================================================ -->
   <div class="overlay" id="review-overlay">
@@ -3080,8 +3126,14 @@ function renderLiveBids(bids, job, newBidId = null) {
         </div>
       </div>
       ${bid.message ? `<div class="bid-message">"${escapeHTML(bid.message)}"</div>` : ''}
+      ${bid.counterPrice
+        ? `<div class="counter-note">You countered <strong>$${bid.counterPrice}</strong> — waiting on ${escapeHTML(bid.notaryName.split(' ')[0])}.</div>`
+        : ''}
       <div class="bid-actions">
         <button class="accept-btn" onclick="acceptBid('${bid.id}')">Accept Bid</button>
+        ${bid.counterPrice
+          ? `<button class="profile-link" onclick="cancelCounter('${bid.id}')">Cancel counter</button>`
+          : `<button class="profile-link" onclick="openCounterModal('${bid.id}')">Counter</button>`}
         <button class="profile-link" onclick="openNotaryProfile('${bid.notaryId}')">View Profile</button>
       </div>
     </div>
@@ -3175,6 +3227,104 @@ function acceptBid(bidId) {
 
   toast(`Bid accepted — ${bid.notaryName} confirmed`);
   renderMyJob();
+}
+
+/* ================================================================
+   COUNTER-OFFER — customer proposes a lower price on a pending bid
+   ================================================================ */
+let _counterBidId = null;
+
+function openCounterModal(bidId) {
+  const bid = STATE.bids.find(b => b.id === bidId);
+  if (!bid) return;
+  _counterBidId = bidId;
+  document.getElementById('cm-sub').textContent = 'To ' + bid.notaryName;
+  document.getElementById('cm-orig').textContent = '$' + bid.price;
+  const inp = document.getElementById('cm-price');
+  inp.value = '';
+  inp.max = bid.price - 1;
+  inp.closest('.field').classList.remove('has-error');
+  document.getElementById('cm-message').value = '';
+  document.getElementById('counter-overlay').classList.add('open');
+  setTimeout(() => inp.focus(), 50);
+}
+
+function closeCounterModal() {
+  document.getElementById('counter-overlay').classList.remove('open');
+  _counterBidId = null;
+}
+
+function submitCounter(e) {
+  if (e) e.preventDefault();
+  const bid = STATE.bids.find(b => b.id === _counterBidId);
+  if (!bid) return false;
+  const price = +document.getElementById('cm-price').value;
+  const field = document.getElementById('cm-price').closest('.field');
+  if (!price || price <= 0 || price >= bid.price) {
+    field.classList.add('has-error');
+    return false;
+  }
+  field.classList.remove('has-error');
+  const msg = document.getElementById('cm-message').value.trim();
+
+  bid.counterPrice = price;
+  bid.counterMessage = msg || null;
+  bid.counterAt = Date.now();
+  saveState();
+  sbUpdateCounter(bid.id, price, msg || null).catch(err => console.warn('[Supabase] counter:', err));
+
+  if (bid.notaryId && bid.notaryId !== (sbUser?.id)) {
+    sbCreateNotification?.({
+      userId: bid.notaryId, type: 'counter',
+      title: 'Customer counter-offer',
+      body: `Countered $${price} on your bid`,
+      link_target: 'my-bids'
+    });
+  }
+
+  closeCounterModal();
+  toast('Counter-offer sent');
+  renderMyJob();
+  return false;
+}
+
+function cancelCounter(bidId) {
+  const bid = STATE.bids.find(b => b.id === bidId);
+  if (!bid) return;
+  bid.counterPrice = null;
+  bid.counterMessage = null;
+  bid.counterAt = null;
+  saveState();
+  sbUpdateCounter(bid.id, null, null).catch(err => console.warn('[Supabase] clear counter:', err));
+  renderMyJob();
+  toast('Counter withdrawn');
+}
+
+/* Notary accepts the customer's counter — bid price drops, job confirms. */
+function notaryAcceptCounter(bidId) {
+  const bid = STATE.bids.find(b => b.id === bidId);
+  if (!bid || !bid.counterPrice) return;
+  bid.price = bid.counterPrice;
+  bid.counterPrice = null;
+  bid.counterMessage = null;
+  bid.counterAt = null;
+  saveState();
+  acceptBid(bidId);            // marks job accepted + others lost, mirrors to Supabase
+  if (renderMyBids) renderMyBids();
+  toast('Counter accepted — job confirmed');
+}
+
+/* Notary declines the counter — bid reverts to its original price. */
+function notaryDeclineCounter(bidId) {
+  const bid = STATE.bids.find(b => b.id === bidId);
+  if (!bid) return;
+  bid.counterPrice = null;
+  bid.counterMessage = null;
+  bid.counterAt = null;
+  saveState();
+  sbUpdateCounter(bid.id, null, null).catch(err => console.warn('[Supabase] decline counter:', err));
+  renderMyBids();
+  toast('Counter declined');
 }
 
 function cancelUserJob() {
@@ -3682,7 +3832,16 @@ function renderMyBidsList() {
             <div class="mybid-status ${statusClass}">${statusLabel}</div>
           </div>
         </div>
-        ${b.status === 'pending' && job && job.status === 'open'
+        ${b.counterPrice && b.status === 'pending'
+          ? `<div class="counter-note" style="margin-top:8px;">
+               Customer countered <strong>$${b.counterPrice}</strong>${b.counterMessage ? ' — "' + escapeHTML(b.counterMessage) + '"' : ''}
+               <div style="display:flex;gap:8px;margin-top:8px;">
+                 <button class="btn btn-primary btn-sm" onclick="notaryAcceptCounter('${b.id}')">Accept $${b.counterPrice}</button>
+                 <button class="btn btn-ghost btn-sm" onclick="notaryDeclineCounter('${b.id}')">Decline</button>
+               </div>
+             </div>`
+          : ''}
+        ${b.status === 'pending' && job && job.status === 'open' && !b.counterPrice
           ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);">
                <button class="btn btn-ghost btn-sm" onclick="cancelBid('${b.id}')">Withdraw bid</button>
              </div>`
@@ -4268,8 +4427,21 @@ function rowToBid(row) {
     price:         Number(row.price),
     message:       row.message || '',
     status:        row.status,
+    counterPrice:   row.customer_counter_price != null ? Number(row.customer_counter_price) : null,
+    counterMessage: row.customer_counter_message || null,
+    counterAt:      row.customer_counter_at ? new Date(row.customer_counter_at).getTime() : null,
     placedAt:      new Date(row.created_at).getTime()
   };
+}
+
+/* Populate or clear the customer counter-offer fields on a bid. */
+async function sbUpdateCounter(bidId, price, message) {
+  if (!sb || !sbUser) return;
+  const patch = price == null
+    ? { customer_counter_price: null, customer_counter_message: null, customer_counter_at: null }
+    : { customer_counter_price: price, customer_counter_message: message, customer_counter_at: new Date().toISOString() };
+  const { error } = await sb.from('bids').update(patch).eq('id', bidId);
+  if (error) throw error;
 }
 
 /* Fetch jobs + bids from Supabase and merge into STATE.
