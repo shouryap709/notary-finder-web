@@ -253,6 +253,42 @@
   .radio-pill:hover { border-color: #000; color: #000; }
   .radio-pill.on { background: #000; color: #fff; border-color: #000; }
 
+  /* Urgency selector (post-job step 3) */
+  .urgency-group { display: flex; flex-direction: column; gap: 6px; }
+  .urgency-opt {
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer; font-family: 'DM Sans',sans-serif; text-align: left;
+    background: #fff; border: 1px solid #e2e2e2; border-radius: 8px;
+    padding: 9px 12px; transition: border-color .15s, background .15s;
+  }
+  .urgency-opt:hover { border-color: #000; }
+  .urgency-opt.on { border-color: #000; background: #fafafa; }
+  .urgency-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .urgency-text { display: flex; flex-direction: column; gap: 1px; }
+  .urgency-text strong { font-size: 11px; font-weight: 600; color: #000; }
+  .urgency-text em { font-size: 9px; font-style: normal; color: #999; }
+  .urgency-bump { font-size: 8.5px; font-weight: 600; color: #888; margin-left: 3px; }
+
+  /* Urgency badge on notary job cards */
+  .urgency-badge {
+    display: inline-block; font-size: 8px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .4px;
+    padding: 2px 6px; border-radius: 4px; vertical-align: middle;
+  }
+  .urgency-badge.express { background: #fdf3d8; color: #9a7307; }
+  .urgency-badge.urgent  { background: #fbe0e0; color: #b02e2e; }
+  .urgency-badge.standard { background: #f0f0f0; color: #888; }
+
+  /* Urgency filter chips on notary dashboard */
+  .urg-filter { display: flex; gap: 6px; margin: 0 0 12px; }
+  .urg-chip {
+    font-family: 'DM Sans',sans-serif; font-size: 9.5px; font-weight: 500;
+    color: #777; background: #fff; border: 1px solid #e2e2e2;
+    border-radius: 20px; padding: 4px 11px; cursor: pointer; transition: all .14s;
+  }
+  .urg-chip:hover { border-color: #000; color: #000; }
+  .urg-chip.on { background: #000; color: #fff; border-color: #000; }
+
   .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
   /* ============================================================
@@ -1388,6 +1424,24 @@
           </div>
 
           <div class="field">
+            <label class="field-label">How soon do you need it?</label>
+            <div class="urgency-group" id="jf-urgency">
+              <button type="button" class="urgency-opt on" data-val="standard">
+                <span class="urgency-dot" style="background:#aaa;"></span>
+                <span class="urgency-text"><strong>Standard</strong><em>Within a week · normal pricing</em></span>
+              </button>
+              <button type="button" class="urgency-opt" data-val="express">
+                <span class="urgency-dot" style="background:var(--accent-amber,#d9a017);"></span>
+                <span class="urgency-text"><strong>Express <span class="urgency-bump">+25%</span></strong><em>Within 48 hours</em></span>
+              </button>
+              <button type="button" class="urgency-opt" data-val="urgent">
+                <span class="urgency-dot" style="background:var(--accent-red,#d04545);"></span>
+                <span class="urgency-text"><strong>Urgent <span class="urgency-bump">+50%</span></strong><em>Within 24 hours</em></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="field">
             <label class="field-label" for="jf-notes">Notes for the notary <span style="color:#ccc;font-weight:400;">(optional)</span></label>
             <textarea id="jf-notes" class="field-textarea" placeholder="Parking instructions, building access, witnesses needed, language preference…"></textarea>
           </div>
@@ -1605,6 +1659,12 @@
       </div>
 
       <div class="section-label">Available jobs <span class="count" id="dash-job-count"></span></div>
+      <div class="urg-filter" id="dash-urgency-filter">
+        <button class="urg-chip on" data-urg="all" onclick="setDashUrgencyFilter('all')">All</button>
+        <button class="urg-chip" data-urg="standard" onclick="setDashUrgencyFilter('standard')">Standard</button>
+        <button class="urg-chip" data-urg="express" onclick="setDashUrgencyFilter('express')">Express</button>
+        <button class="urg-chip" data-urg="urgent" onclick="setDashUrgencyFilter('urgent')">Urgent</button>
+      </div>
       <div class="dash-jobs-list" id="dash-jobs-list">
         <!-- Rendered dynamically -->
       </div>
@@ -2273,14 +2333,15 @@ const SERVICE_ADDONS = {
   'Loan Signing': 50,
   'Real Estate': 40
 };
-function calculateSuggestedPrice(services, signatures, notaryPreference) {
+const URGENCY_MULT = { standard: 1.0, express: 1.25, urgent: 1.5 };
+function calculateSuggestedPrice(services, signatures, notaryPreference, urgency = 'standard') {
   let price = 15;
   price += (Number(signatures) || 0) * 5;
   if (notaryPreference === 'Mobile') price += 25;
   // Accept either a string or an array for backwards compat.
   const list = Array.isArray(services) ? services : (services ? [services] : []);
   list.forEach(s => { price += SERVICE_ADDONS[s] || 0; });
-  return price;
+  return Math.round(price * (URGENCY_MULT[urgency] || 1));
 }
 
 /* ----- Service helpers — every job stores `services` as an array.
@@ -2393,6 +2454,7 @@ const $prefGroup     = document.getElementById('jf-pref');
 const $stepperEl     = document.getElementById('stepper');
 
 let currentPref = 'Mobile';
+let currentUrgency = 'standard';
 let userTouchedPrice = false;
 let selectedServices = new Set();    // multi-select services for the new job
 
@@ -2474,6 +2536,17 @@ $prefGroup.addEventListener('click', e => {
   updateSuggested();
 });
 
+document.getElementById('jf-urgency').addEventListener('click', e => {
+  const opt = e.target.closest('.urgency-opt');
+  if (!opt) return;
+  document.querySelectorAll('#jf-urgency .urgency-opt').forEach(o => o.classList.remove('on'));
+  opt.classList.add('on');
+  currentUrgency = opt.dataset.val;
+  // Reset manual-price override so the urgency multiplier reflows.
+  userTouchedPrice = false;
+  updateSuggested();
+});
+
 // Multi-select services: each pill toggles on click.
 $servicesGrid.addEventListener('click', e => {
   const pill = e.target.closest('.svc-pill');
@@ -2501,7 +2574,7 @@ $price.addEventListener('input', () => { userTouchedPrice = true; });
 
 function updateSuggested() {
   const services = [...selectedServices];
-  const suggested = calculateSuggestedPrice(services, $signatures.value, currentPref);
+  const suggested = calculateSuggestedPrice(services, $signatures.value, currentPref, currentUrgency);
   $suggested.innerHTML = `$${suggested}<span>based on your job</span>`;
   // Default the user's price to the suggestion until they edit it.
   if (!userTouchedPrice) $price.value = suggested;
@@ -2512,6 +2585,8 @@ function resetPostJobForm() {
   $signatures.value = 1;
   $prefGroup.querySelectorAll('.radio-pill').forEach((p, i) => p.classList.toggle('on', i === 0));
   currentPref = 'Mobile';
+  currentUrgency = 'standard';
+  document.querySelectorAll('#jf-urgency .urgency-opt').forEach((o, i) => o.classList.toggle('on', i === 0));
   userTouchedPrice = false;
   selectedServices.clear();
   $servicesGrid.querySelectorAll('.svc-pill').forEach(p => p.classList.remove('on'));
@@ -2598,8 +2673,9 @@ $jobForm.addEventListener('submit', async e => {
     locationLng:  jobLocation.lng,
     dateTime: $datetime.value,
     notes: $notes.value.trim(),
+    urgency: currentUrgency,
     startingPrice: +$price.value,
-    suggestedPrice: calculateSuggestedPrice(services, $signatures.value, currentPref),
+    suggestedPrice: calculateSuggestedPrice(services, $signatures.value, currentPref, currentUrgency),
     status: 'open',
     acceptedBidId: null,
     postedAt: Date.now(),
@@ -3245,10 +3321,15 @@ function renderDashboard() {
   }
 
   // Filter by max travel (respect showAllJobs toggle)
-  const filteredJobs = (hasHome && !showAllJobs)
+  let filteredJobs = (hasHome && !showAllJobs)
     ? openJobs.filter(j => j._distMi === null || j._distMi <= maxMi)
     : openJobs;
   const hiddenCount = openJobs.length - filteredJobs.length;
+
+  // Urgency filter
+  if (dashUrgencyFilter !== 'all') {
+    filteredJobs = filteredJobs.filter(j => (j.urgency || 'standard') === dashUrgencyFilter);
+  }
 
   // Distance / filter banner
   const bannerEl = document.getElementById('dash-distance-banner');
@@ -3295,7 +3376,7 @@ function renderDashboard() {
         <div class="job-card-row">
           <div class="job-icon-wrap">${serviceIcon(jobPrimaryService(job))}</div>
           <div class="job-card-info">
-            <div class="job-card-title" style="display:flex;align-items:center;gap:7px;">${jobServiceLabel(job)}${distLabel}</div>
+            <div class="job-card-title" style="display:flex;align-items:center;gap:7px;">${jobServiceLabel(job)}${distLabel}${urgencyBadge(job.urgency)}</div>
             <div class="job-card-meta">
               ${job.signatures} sig${job.signatures !== 1 ? 's' : ''}
               <span class="sep">·</span> ${job.location}
@@ -3510,6 +3591,20 @@ $bmSubmit.addEventListener('click', async () => {
    ================================================================ */
 let activeBidsTab = 'active';
 let showAllJobs   = false;
+let dashUrgencyFilter = 'all';
+
+function urgencyBadge(urgency) {
+  const u = urgency || 'standard';
+  if (u === 'standard') return '';
+  return `<span class="urgency-badge ${u}">${u}</span>`;
+}
+
+function setDashUrgencyFilter(val) {
+  dashUrgencyFilter = val;
+  document.querySelectorAll('#dash-urgency-filter .urg-chip').forEach(c =>
+    c.classList.toggle('on', c.dataset.urg === val));
+  renderDashboard();
+}
 
 document.getElementById('bid-tabs').addEventListener('click', e => {
   const btn = e.target.closest('.tab-btn');
@@ -4123,6 +4218,7 @@ function jobToRow(job) {
     location_lng:     job.locationLng ?? null,
     date_time:        job.dateTime || null,
     notes:            job.notes || null,
+    urgency:          job.urgency || 'standard',
     starting_price:   job.startingPrice,
     suggested_price:  job.suggestedPrice,
     status:           job.status,
@@ -4145,6 +4241,7 @@ function rowToJob(row) {
     locationLng:      row.location_lng || null,
     dateTime:         row.date_time ? new Date(row.date_time).toISOString().slice(0, 16) : '',
     notes:            row.notes || '',
+    urgency:          row.urgency || 'standard',
     startingPrice:    Number(row.starting_price) || 0,
     suggestedPrice:   Number(row.suggested_price) || 0,
     status:                row.status || 'open',
