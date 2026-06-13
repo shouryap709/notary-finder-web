@@ -1338,6 +1338,17 @@
   .newsletter-form input:focus { border-color: #000; }
   .newsletter-msg { font-size: 10.5px; color: #1f8a3b; margin-top: 8px; min-height: 14px; }
   .newsletter-msg.error { color: var(--accent-red, #e53935); }
+
+  /* ---- Trust badges ---- */
+  .trust-row {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 26px;
+    margin: 22px auto 4px; max-width: 560px; padding: 0 16px;
+  }
+  .trust-item { display: flex; align-items: center; gap: 7px; font-size: 10px; color: #9a9a9a; }
+  .trust-item svg { width: 16px; height: 16px; color: #bdbdbd; flex-shrink: 0; }
+  .trust-item strong { color: #777; font-weight: 600; }
+  .trust-press { gap: 6px; }
+  .trust-press-todo { font-size: 9px; color: #ccc; border: 1px dashed #ddd; border-radius: 5px; padding: 1px 6px; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1391,6 +1402,25 @@
       </div>
 
       <div class="tier-strip" id="customer-tier-strip" style="display:none"></div>
+
+      <div class="trust-row">
+        <div class="trust-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+          <span>Verified notaries</span>
+        </div>
+        <div class="trust-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          <span>Encrypted in transit</span>
+        </div>
+        <div class="trust-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-8"/><path d="M21 8v4h-4"/></svg>
+          <span><strong id="trust-sig-count">5,000+</strong> signatures notarized</span>
+        </div>
+        <div class="trust-item trust-press">
+          <span>Featured in</span>
+          <span class="trust-press-todo">[ press logos ]</span>
+        </div>
+      </div>
 
       <div class="how-it-works">
         <div class="hiw-card">
