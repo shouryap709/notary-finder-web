@@ -3214,6 +3214,24 @@ function renderDashboard() {
   const isInvited = j => j.invitedNotaryId && j.invitedNotaryId === myNotaryId;
   filteredJobs = [...filteredJobs.filter(isInvited), ...filteredJobs.filter(j => !isInvited(j))];
 
+  // Out of office — hide all open jobs and surface a return banner.
+  const oooBanner = document.getElementById('dash-distance-banner');
+  if (oooActive()) {
+    filteredJobs = [];
+    if (oooBanner) {
+      oooBanner.innerHTML = `
+        <div style="margin-bottom:14px;padding:10px 12px;background:#fff7e6;border:1px solid #f0dca8;border-radius:7px;font-size:9.5px;color:#8a6d1f;display:flex;align-items:center;justify-content:space-between;">
+          <span>You're out of office until <strong>${escapeHTML(notarySession.oooUntil)}</strong>. New jobs are hidden.</span>
+          <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:2px 8px;" onclick="returnFromOoo()">Return now</button>
+        </div>`;
+    }
+    document.getElementById('dash-job-count').textContent = '0 open near you';
+    const _list = document.getElementById('dash-jobs-list');
+    if (_list) _list.innerHTML = `<div class="empty-state"><div class="es-title">You're out of office.</div><div class="es-sub">Tap "Return now" above to start receiving jobs again.</div></div>`;
+    renderPastBids(myBids);
+    return;
+  }
+
   // Distance / filter banner
   const bannerEl = document.getElementById('dash-distance-banner');
   if (bannerEl) {
@@ -3300,37 +3318,40 @@ function renderDashboard() {
   }).join('');
   }
 
+  renderPastBids(myBids);
+}
+
+function renderPastBids(myBids) {
   const pastEl = document.getElementById('dash-past-bids');
-  if (pastEl) {
-    const pastBids = myBids
-      .filter(b => b.status === 'lost' || b.status === 'cancelled')
-      .sort((a, b) => b.placedAt - a.placedAt)
-      .slice(0, 5);
-    if (pastBids.length === 0) {
-      pastEl.innerHTML = '';
-    } else {
-      pastEl.innerHTML = `
-        <div class="section-label" style="margin-top:20px;">Past bids</div>
-        ${pastBids.map(b => {
-          const pj = STATE.jobs.find(j => j.id === b.jobId);
-          const sc = b.status === 'cancelled' ? 'status-cancelled' : 'status-lost';
-          const sl = b.status === 'cancelled' ? 'Withdrawn' : 'Lost';
-          return `<div class="mybid-card" style="opacity:.5;margin-bottom:8px;">
-            <div class="mybid-row">
-              <div class="mybid-info">
-                <div class="mybid-title">${pj ? jobServiceLabel(pj) : 'Job removed'}</div>
-                <div class="mybid-meta">${pj ? pj.location + ' · ' : ''}placed ${formatTimeAgo(b.placedAt)}</div>
-              </div>
-              <div class="mybid-right">
-                <div class="mybid-price" style="font-size:12px;">$${b.price}</div>
-                <div class="mybid-status ${sc}">${sl}</div>
-              </div>
-            </div>
-          </div>`;
-        }).join('')}
-      `;
-    }
+  if (!pastEl) return;
+  const pastBids = myBids
+    .filter(b => b.status === 'lost' || b.status === 'cancelled')
+    .sort((a, b) => b.placedAt - a.placedAt)
+    .slice(0, 5);
+  if (pastBids.length === 0) {
+    pastEl.innerHTML = '';
+    return;
   }
+  pastEl.innerHTML = `
+    <div class="section-label" style="margin-top:20px;">Past bids</div>
+    ${pastBids.map(b => {
+      const pj = STATE.jobs.find(j => j.id === b.jobId);
+      const sc = b.status === 'cancelled' ? 'status-cancelled' : 'status-lost';
+      const sl = b.status === 'cancelled' ? 'Withdrawn' : 'Lost';
+      return `<div class="mybid-card" style="opacity:.5;margin-bottom:8px;">
+        <div class="mybid-row">
+          <div class="mybid-info">
+            <div class="mybid-title">${pj ? jobServiceLabel(pj) : 'Job removed'}</div>
+            <div class="mybid-meta">${pj ? pj.location + ' · ' : ''}placed ${formatTimeAgo(b.placedAt)}</div>
+          </div>
+          <div class="mybid-right">
+            <div class="mybid-price" style="font-size:12px;">$${b.price}</div>
+            <div class="mybid-status ${sc}">${sl}</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  `;
 }
 
 function serviceIcon(type) {
@@ -3425,6 +3446,13 @@ $bmSubmit.addEventListener('click', async () => {
   const price = +$bmPrice.value;
   const field = $bmPrice.closest('.field');
   const ceiling = job.startingPrice;
+
+  // Out of office — block new bids.
+  if (oooActive()) {
+    $bmPriceErr.textContent = `You're out of office until ${notarySession.oooUntil}. Return to bid.`;
+    field.classList.add('has-error');
+    return;
+  }
 
   // Client-side ceiling validation — blocks before any state mutation.
   if (!price || price < 1) {
