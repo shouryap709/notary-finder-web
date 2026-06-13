@@ -1313,6 +1313,18 @@
     .cert-sheet { max-width: none; padding: 0; }
     .rt-dot, #rt-dot, .cookie-banner, .notif-bell { display: none !important; }
   }
+
+  /* ---- What's new changelog ---- */
+  .changelog-dot {
+    display: none; width: 6px; height: 6px; border-radius: 50%; background: #e53935;
+    margin-left: 4px; vertical-align: top;
+  }
+  .changelog-dot.show { display: inline-block; }
+  .cl-entry { padding: 11px 0; border-bottom: 1px solid #f0f0f0; }
+  .cl-entry:last-child { border-bottom: none; }
+  .cl-date { font-size: 8.5px; text-transform: uppercase; letter-spacing: .5px; color: #aaa; font-weight: 600; }
+  .cl-title { font-size: 12px; font-weight: 600; color: #111; margin: 3px 0 4px; }
+  .cl-body { font-size: 10.5px; color: #777; line-height: 1.6; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1394,6 +1406,8 @@
       <span>Contact: <a href="mailto:hello@printnparcel.com">hello@printnparcel.com</a></span>
       <span class="sep">|</span>
       <a href="#" onclick="openCookieBanner();return false;">Cookie settings</a>
+      <span class="sep">|</span>
+      <a href="#" id="changelog-link" onclick="openChangelog();return false;">What's new<span class="changelog-dot" id="changelog-dot"></span></a>
     </div>
   </div>
 
@@ -2051,6 +2065,20 @@
     </div>
     <div class="np-list" id="np-list">
       <div class="np-empty">No notifications yet.</div>
+    </div>
+  </div>
+
+  <!-- What's new changelog modal -->
+  <div class="overlay" id="changelog-overlay">
+    <div class="modal" style="max-width:380px;width:380px;">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title">What's new</div>
+          <div class="modal-sub">Recent updates to NotaryFinder</div>
+        </div>
+        <button class="modal-close" onclick="closeChangelog()">&#x2715;</button>
+      </div>
+      <div class="modal-body" id="changelog-list" style="max-height:340px;overflow-y:auto;"></div>
     </div>
   </div>
 
@@ -5398,6 +5426,44 @@ async function renderCertificate(jobId) {
     </div>`;
 }
 
+/* ---- Feature 56: What's new changelog ---- */
+const CHANGELOG = [
+  { date: '2026-06-12', title: 'Browse notaries directory', body: 'Search verified notaries and hire one directly without waiting for bids.' },
+  { date: '2026-06-10', title: 'Completion certificates', body: 'Download a printable certificate of completion after any finished job.' },
+  { date: '2026-06-01', title: 'Mobile responsive design', body: 'The whole marketplace now works beautifully on phones and tablets.' },
+  { date: '2026-05-20', title: 'Customer reward tiers', body: 'Earn Silver, Gold, and Platinum status as you complete more jobs.' },
+  { date: '2026-05-04', title: 'Real-time bidding launched', body: 'Watch notary bids arrive live the moment you post a job.' }
+];
+
+function changelogLatestDate() {
+  return CHANGELOG.reduce((a, c) => c.date > a ? c.date : a, '');
+}
+
+function openChangelog() {
+  const list = document.getElementById('changelog-list');
+  list.innerHTML = CHANGELOG.map(c => `
+    <div class="cl-entry">
+      <div class="cl-date">${new Date(c.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
+      <div class="cl-title">${escapeHTML(c.title)}</div>
+      <div class="cl-body">${escapeHTML(c.body)}</div>
+    </div>`).join('');
+  document.getElementById('changelog-overlay').classList.add('open');
+  try { localStorage.setItem('changelogLastSeen', changelogLatestDate()); } catch (e) {}
+  document.getElementById('changelog-dot')?.classList.remove('show');
+}
+
+function closeChangelog() {
+  document.getElementById('changelog-overlay').classList.remove('open');
+}
+
+function initChangelogDot() {
+  let seen = '';
+  try { seen = localStorage.getItem('changelogLastSeen') || ''; } catch (e) {}
+  if (changelogLatestDate() > seen) {
+    document.getElementById('changelog-dot')?.classList.add('show');
+  }
+}
+
 /* ================================================================
    Boot
    ================================================================ */
@@ -5438,6 +5504,7 @@ async function renderCertificate(jobId) {
 
   setLegalLinks();
   initCookieConsent();
+  initChangelogDot();
   seedIfEmpty();
   renderStepper();
   updateSuggested();
