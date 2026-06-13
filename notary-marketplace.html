@@ -1254,6 +1254,40 @@
   .bc-price { font-weight: 600; color: #111; }
   .bc-price.green { color: #1f8a3b; }
   .bc-accept { width: 100%; }
+
+  /* ---- Public notary directory ---- */
+  .dir-search {
+    width: 100%; padding: 11px 14px; border: 1px solid #e2e2e2; border-radius: 10px;
+    font-size: 12px; margin-bottom: 16px; outline: none; transition: border-color .14s;
+  }
+  .dir-search:focus { border-color: #000; }
+  .dir-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media (max-width: 560px) { .dir-list { grid-template-columns: 1fr; } }
+  .dir-card { border: 1px solid #eee; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; }
+  .dir-card-top { display: flex; gap: 11px; align-items: center; margin-bottom: 9px; }
+  .dir-avatar {
+    width: 42px; height: 42px; border-radius: 50%; background: #111; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; flex-shrink: 0;
+  }
+  .dir-name { font-size: 12.5px; font-weight: 600; color: #111; }
+  .dir-biz { font-size: 9.5px; color: #999; margin-top: 1px; }
+  .dir-rating { font-size: 10px; color: #777; margin-bottom: 8px; }
+  .dir-specs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 11px; }
+  .dir-spec { font-size: 8.5px; font-weight: 600; color: #555; background: #f3f3f3; border-radius: 20px; padding: 2px 8px; }
+  .dir-card .btn { margin-top: auto; }
+  .dir-pager { display: flex; justify-content: center; gap: 6px; margin-top: 18px; }
+  .dir-pager button {
+    border: 1px solid #ddd; background: #fff; color: #555; font-size: 11px; font-weight: 600;
+    min-width: 30px; padding: 6px 9px; border-radius: 7px; cursor: pointer;
+  }
+  .dir-pager button.on { background: #000; color: #fff; border-color: #000; }
+  .dir-pager button:disabled { opacity: .4; cursor: default; }
+  .dir-empty { text-align: center; color: #aaa; font-size: 11px; padding: 30px 0; grid-column: 1 / -1; }
+  .invite-banner {
+    display: flex; align-items: center; gap: 10px; background: #f0faf2; border: 1px solid #cdeccf;
+    border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 11px; color: #1f6e36;
+  }
+  .invite-banner button { margin-left: auto; border: none; background: none; color: #1f8a3b; cursor: pointer; font-size: 14px; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1289,6 +1323,7 @@
         <button class="nav-btn active" onclick="goTo('home')">Home</button>
         <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
+        <button class="nav-btn" onclick="navRoute('#/notaries')">Browse Notaries</button>
       </nav>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle" id="mode-toggle">
@@ -1359,6 +1394,7 @@
     <div class="form-shell">
       <div class="page-title">Post a job</div>
       <div class="page-subtitle">Five quick steps. We'll send your job to nearby notaries the moment you submit.</div>
+      <div id="invite-banner" class="invite-banner" style="display:none"></div>
 
       <!-- Stepper -->
       <div class="stepper" id="stepper">
@@ -1920,6 +1956,33 @@
   </div>
 
   <!-- ============================================================
+       PAGE: PUBLIC NOTARY DIRECTORY  (#/notaries)
+       ============================================================ -->
+  <div class="page" id="notaries">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <nav class="nav" data-mode-nav="customer">
+        <button class="nav-btn" onclick="goTo('home')">Home</button>
+        <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
+        <button class="nav-btn active" onclick="navRoute('#/notaries')">Browse Notaries</button>
+      </nav>
+      <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
+      <div class="mode-toggle">
+        <button data-mode="customer" class="on">Customer</button>
+        <button data-mode="notary">Notary</button>
+      </div>
+    </div>
+    <div class="form-shell">
+      <div class="page-title">Browse notaries</div>
+      <div class="page-subtitle">Verified notaries on NotaryFinder. Hire one directly or post a job for bids.</div>
+      <input id="dir-search" class="dir-search" type="text" placeholder="Search by name, service, or city…" oninput="onDirSearch()" />
+      <div id="dir-list" class="dir-list"></div>
+      <div id="dir-pager" class="dir-pager"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
        NOTARY APP MODAL — shown every time a user enters notary mode
        ============================================================ -->
   <div class="overlay" id="notary-app-overlay">
@@ -2392,7 +2455,7 @@ function goTo(pageId) {
   if (pageId === 'my-job') renderMyJob();
   if (pageId === 'notary-dashboard') { renderDashboard(); renderNotaryHeaderPill(); }
   if (pageId === 'my-bids') { renderMyBids(); renderNotaryHeaderPill(); }
-  if (pageId === 'post-job') resetPostJobForm();
+  if (pageId === 'post-job') { resetPostJobForm(); renderInviteBanner(); }
 
   // Realtime lifecycle — subscribe for live updates.
   if (sb) {
@@ -5105,6 +5168,138 @@ function initCookieConsent() {
   }
 }
 
+/* ---- Shared hash router (features 54, 55, 60, 61, 63) ---- */
+const HASH_ROUTES = [];
+function registerRoute(re, handler) { HASH_ROUTES.push({ re, handler }); }
+function navRoute(hash) {
+  if (location.hash === hash) handleHashRoute();
+  else location.hash = hash;
+}
+function handleHashRoute() {
+  const h = location.hash || '';
+  if (!h.startsWith('#/')) return false;
+  for (const { re, handler } of HASH_ROUTES) {
+    const m = h.match(re);
+    if (m) { handler(m); return true; }
+  }
+  return false;
+}
+window.addEventListener('hashchange', handleHashRoute);
+
+/* ---- Feature 54: Public notary directory ---- */
+const DIR_PAGE_SIZE = 20;
+let dirAll = [];        // all loaded approved+verified notaries
+let dirFiltered = [];
+let dirPage = 0;
+let dirLoaded = false;
+
+registerRoute(/^#\/notaries$/, () => openNotaryDirectory());
+
+async function openNotaryDirectory() {
+  goTo('notaries');
+  if (!dirLoaded) { await loadDirectory(); dirLoaded = true; }
+  applyDirFilter();
+}
+
+async function loadDirectory() {
+  dirAll = [];
+  if (sb) {
+    try {
+      const { data } = await sb.from('profiles')
+        .select('id,full_name,business_name,rating,reviews_count,verification_status,services,state')
+        .eq('role', 'notary')
+        .eq('verification_status', 'approved')
+        .order('rating', { ascending: false });
+      if (data) dirAll = data;
+    } catch (e) { /* fall through to demo data */ }
+  }
+  if (dirAll.length === 0) {
+    // Offline / demo fallback built from seeded notaries
+    dirAll = STATE.notaries.map(n => ({
+      id: n.id, full_name: n.name, business_name: '',
+      rating: n.rating, reviews_count: n.reviews,
+      verification_status: 'approved',
+      services: ['Loan Signing', 'Apostille', 'Acknowledgment'].slice(0, 1 + (n.reviews % 3)),
+      state: 'CA'
+    }));
+  }
+}
+
+function onDirSearch() { dirPage = 0; applyDirFilter(); }
+
+function applyDirFilter() {
+  const q = (document.getElementById('dir-search')?.value || '').trim().toLowerCase();
+  dirFiltered = !q ? dirAll.slice() : dirAll.filter(n => {
+    const svc = (n.services || []).join(' ').toLowerCase();
+    return (n.full_name || '').toLowerCase().includes(q)
+        || (n.business_name || '').toLowerCase().includes(q)
+        || (n.state || '').toLowerCase().includes(q)
+        || svc.includes(q);
+  });
+  renderDirList();
+}
+
+function renderDirList() {
+  const list = document.getElementById('dir-list');
+  const pager = document.getElementById('dir-pager');
+  if (!list) return;
+  if (dirFiltered.length === 0) {
+    list.innerHTML = `<div class="dir-empty">No notaries match your search.</div>`;
+    pager.innerHTML = '';
+    return;
+  }
+  const pages = Math.ceil(dirFiltered.length / DIR_PAGE_SIZE);
+  dirPage = Math.min(dirPage, pages - 1);
+  const slice = dirFiltered.slice(dirPage * DIR_PAGE_SIZE, dirPage * DIR_PAGE_SIZE + DIR_PAGE_SIZE);
+
+  list.innerHTML = slice.map(n => {
+    const specs = (n.services || []).slice(0, 3)
+      .map(s => `<span class="dir-spec">${escapeHTML(s)}</span>`).join('');
+    return `
+      <div class="dir-card">
+        <div class="dir-card-top">
+          <div class="dir-avatar">${initialsFor(n.full_name)}</div>
+          <div>
+            <div class="dir-name">${escapeHTML(n.full_name || 'Notary')}</div>
+            ${n.business_name ? `<div class="dir-biz">${escapeHTML(n.business_name)}</div>` : ''}
+          </div>
+        </div>
+        <div class="dir-rating">★ ${Number(n.rating ?? 5).toFixed(1)} · ${n.reviews_count || 0} reviews</div>
+        <div class="dir-specs">${specs || '<span class="dir-spec">General notary</span>'}</div>
+        <button class="btn btn-primary btn-sm" onclick="hireNotary('${n.id}')">Hire directly</button>
+      </div>`;
+  }).join('');
+
+  pager.innerHTML = pages <= 1 ? '' :
+    `<button onclick="dirGo(${dirPage - 1})" ${dirPage === 0 ? 'disabled' : ''}>‹</button>` +
+    Array.from({ length: pages }, (_, i) =>
+      `<button class="${i === dirPage ? 'on' : ''}" onclick="dirGo(${i})">${i + 1}</button>`).join('') +
+    `<button onclick="dirGo(${dirPage + 1})" ${dirPage === pages - 1 ? 'disabled' : ''}>›</button>`;
+}
+
+function dirGo(p) { dirPage = Math.max(0, p); renderDirList(); document.getElementById('notaries').scrollTop = 0; }
+
+/* Pre-invite a notary into a new job and jump to the post-job form. */
+let invitedNotary = null;
+function hireNotary(id) {
+  const n = dirAll.find(x => x.id === id);
+  invitedNotary = { id, name: n?.full_name || 'this notary' };
+  goTo('post-job');
+  renderInviteBanner();
+}
+function clearInvitedNotary() {
+  invitedNotary = null;
+  renderInviteBanner();
+}
+function renderInviteBanner() {
+  const el = document.getElementById('invite-banner');
+  if (!el) return;
+  if (!invitedNotary) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.innerHTML = `<span>Inviting <strong>${escapeHTML(invitedNotary.name)}</strong> to bid on this job.</span>` +
+    `<button title="Remove invite" onclick="clearInvitedNotary()">&#x2715;</button>`;
+  el.style.display = 'flex';
+}
+
 /* ================================================================
    Boot
    ================================================================ */
@@ -5156,6 +5351,7 @@ function initCookieConsent() {
     btn.classList.toggle('on', btn.dataset.mode === 'customer');
   });
   goTo('home');
+  handleHashRoute();   // honor a deep-linked #/route on first load
 
   // Hydrate from Supabase in the background — doesn't block the UI.
   // On success, re-render whatever page is currently active.
