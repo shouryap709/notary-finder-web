@@ -1365,6 +1365,21 @@
   @media (max-width: 620px) { .esig-grid { grid-template-columns: 1fr; } }
   .esig-preview-label { font-size: 8.5px; text-transform: uppercase; letter-spacing: .6px; color: #bbb; font-weight: 600; margin-bottom: 8px; }
   .esig-preview { border: 1px solid #eee; border-radius: 10px; padding: 16px; background: #fafafa; min-height: 90px; overflow-x: auto; }
+
+  /* ---- Blog ---- */
+  .blog-list { display: flex; flex-direction: column; gap: 4px; }
+  .blog-item { border-bottom: 1px solid #f0f0f0; padding: 16px 0; cursor: pointer; }
+  .blog-item:hover .blog-item-title { color: #000; }
+  .blog-item-title { font-size: 14px; font-weight: 600; color: #222; transition: color .14s; }
+  .blog-item-excerpt { font-size: 11px; color: #888; line-height: 1.6; margin-top: 5px; }
+  .blog-item-meta { font-size: 9px; color: #bbb; text-transform: uppercase; letter-spacing: .5px; margin-top: 6px; }
+  .blog-article { max-width: 600px; margin: 18px auto 0; }
+  .blog-article h1 { font-size: 20px; font-weight: 700; letter-spacing: -.5px; line-height: 1.25; margin: 0 0 8px; }
+  .blog-article .blog-meta { font-size: 9.5px; color: #bbb; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 20px; }
+  .blog-article h2 { font-size: 14px; font-weight: 600; margin: 22px 0 8px; color: #111; }
+  .blog-article p { font-size: 12.5px; line-height: 1.8; color: #444; margin: 0 0 12px; }
+  .blog-article ul { margin: 0 0 12px; padding-left: 20px; }
+  .blog-article li { font-size: 12.5px; line-height: 1.7; color: #444; margin-bottom: 5px; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1480,6 +1495,10 @@
       <span>Contact: <a href="mailto:hello@printnparcel.com">hello@printnparcel.com</a></span>
       <span class="sep">|</span>
       <a href="#" onclick="openCookieBanner();return false;">Cookie settings</a>
+      <span class="sep">|</span>
+      <a href="#" onclick="navRoute('#/blog');return false;">Blog</a>
+      <span class="sep">|</span>
+      <a href="#" onclick="navRoute('#/pricing');return false;">Pricing</a>
       <span class="sep">|</span>
       <a href="#" id="changelog-link" onclick="openChangelog();return false;">What's new<span class="changelog-dot" id="changelog-dot"></span></a>
     </div>
@@ -2104,6 +2123,51 @@
       <button class="btn btn-primary btn-sm" onclick="window.print()">Print / Save as PDF</button>
     </div>
     <div id="cert-body" class="cert-sheet"></div>
+  </div>
+
+  <!-- ============================================================
+       PAGE: BLOG LIST  (#/blog)
+       ============================================================ -->
+  <div class="page" id="blog">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <nav class="nav" data-mode-nav="customer">
+        <button class="nav-btn" onclick="goTo('home')">Home</button>
+        <button class="nav-btn active" onclick="navRoute('#/blog')">Blog</button>
+      </nav>
+      <div class="mode-toggle">
+        <button data-mode="customer" class="on">Customer</button>
+        <button data-mode="notary">Notary</button>
+      </div>
+    </div>
+    <div class="form-shell">
+      <div class="page-title">NotaryFinder blog</div>
+      <div class="page-subtitle">Guides and answers about getting documents notarized.</div>
+      <div id="blog-list" class="blog-list"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       PAGE: BLOG POST  (#/blog/:slug)
+       ============================================================ -->
+  <div class="page" id="blog-post">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <nav class="nav" data-mode-nav="customer">
+        <button class="nav-btn" onclick="goTo('home')">Home</button>
+        <button class="nav-btn active" onclick="navRoute('#/blog')">Blog</button>
+      </nav>
+      <div class="mode-toggle">
+        <button data-mode="customer" class="on">Customer</button>
+        <button data-mode="notary">Notary</button>
+      </div>
+    </div>
+    <div class="form-shell">
+      <button class="btn btn-secondary btn-sm" onclick="navRoute('#/blog')">&larr; All posts</button>
+      <article id="blog-article" class="blog-article"></article>
+    </div>
   </div>
 
   <!-- ============================================================
@@ -5539,6 +5603,153 @@ async function renderCertificate(jobId) {
         This document records that a notarization took place; it is not the notarized document itself.
       </div>
     </div>`;
+}
+
+/* ---- Feature 61: Notary blog (static) ---- */
+const BLOG_POSTS = [
+  {
+    slug: 'become-a-notary-in-california',
+    title: 'How to become a notary in California',
+    date: '2026-06-05',
+    excerpt: 'A step-by-step guide to getting your California notary commission, from the required course to the exam and bond.',
+    body: `California has one of the most structured notary processes in the country. Here is how it works.
+
+## 1. Meet the basic requirements
+You must be at least 18, a legal California resident, and able to read and write English.
+
+## 2. Take the required education course
+California requires a state-approved 6-hour course for first-time applicants (3 hours for renewals).
+
+## 3. Pass the state exam
+The exam is administered by CPS HR Consulting. You will need a passing score of 70% or higher.
+
+## 4. Submit fingerprints and a background check
+Live Scan fingerprinting is mandatory before your commission is issued.
+
+## 5. File your oath and bond
+Within 30 days of your commission date, file a $15,000 surety bond and your oath of office with the county clerk.
+
+Once approved, list your profile on NotaryFinder to start receiving jobs in your area.`
+  },
+  {
+    slug: 'loan-signing-101',
+    title: 'Loan signing 101',
+    date: '2026-05-28',
+    excerpt: 'What a loan signing agent actually does, what documents are involved, and how to avoid the most common mistakes.',
+    body: `Loan signings are among the most lucrative jobs a mobile notary can take.
+
+## What is a loan signing agent?
+A loan signing agent is a notary who guides borrowers through signing a loan package — often 100+ pages — and ensures every signature and notarization is correct.
+
+## Common document types
+- The Note
+- The Deed of Trust
+- The Closing Disclosure
+- The Right to Cancel
+
+## Avoiding mistakes
+Double-check dates, never give legal advice, and confirm the borrower's ID matches the documents exactly. A single missed signature can delay funding.`
+  },
+  {
+    slug: 'mobile-vs-in-office-notary',
+    title: 'Mobile notary vs in-office: which is better?',
+    date: '2026-05-20',
+    excerpt: 'Mobile notaries come to you; in-office notaries are cheaper. Here is how to decide which fits your situation.',
+    body: `Both options get your document notarized — the right one depends on convenience and cost.
+
+## Mobile notary
+A mobile notary travels to your home, office, or hospital. You pay a travel fee, but you save time and can sign on your schedule.
+
+## In-office notary
+Often found at banks, shipping stores, and law offices. Usually cheaper, but you travel to them during business hours.
+
+## Which to choose
+Choose mobile for urgent, after-hours, or multi-signer situations. Choose in-office for a single quick signature during the day.`
+  },
+  {
+    slug: 'what-is-an-apostille',
+    title: 'What is an Apostille and when do you need one?',
+    date: '2026-05-12',
+    excerpt: 'An apostille certifies a document for international use. Learn when you need one and how the process works.',
+    body: `If you are sending a document abroad, you may need an apostille.
+
+## What is an apostille?
+An apostille is a certificate that authenticates the origin of a public document so it is recognized in countries that are part of the Hague Convention.
+
+## When you need one
+- Birth, marriage, and death certificates for use overseas
+- Powers of attorney for foreign transactions
+- Business documents for international expansion
+
+## The process
+A notary first notarizes the document; then the Secretary of State issues the apostille. NotaryFinder can connect you with notaries experienced in apostille prep.`
+  },
+  {
+    slug: 'documents-that-need-notarization',
+    title: '5 documents that almost always need notarization',
+    date: '2026-05-04',
+    excerpt: 'From powers of attorney to real estate deeds, these are the documents you will almost always need a notary for.',
+    body: `Some documents legally require a notary's seal to be valid.
+
+## The usual suspects
+- Powers of attorney
+- Real estate deeds and transfers
+- Wills and trusts (in many states)
+- Loan and mortgage documents
+- Affidavits and sworn statements
+
+## Why notarization matters
+Notarization deters fraud by verifying the signer's identity and confirming they signed willingly. When in doubt, post your job on NotaryFinder and a verified notary will confirm exactly what you need.`
+  }
+];
+
+registerRoute(/^#\/blog$/, () => renderBlogList());
+registerRoute(/^#\/blog\/([^/]+)$/, (m) => renderBlogPost(m[1]));
+
+function setSeoMeta(title, description) {
+  document.title = title;
+  let tag = document.querySelector('meta[name="description"]');
+  if (!tag) { tag = document.createElement('meta'); tag.setAttribute('name', 'description'); document.head.appendChild(tag); }
+  tag.setAttribute('content', description || '');
+}
+
+function renderBlogList() {
+  goTo('blog');
+  setSeoMeta('NotaryFinder Blog — guides on getting documents notarized',
+    'Guides and answers about notarization, apostilles, loan signings, and becoming a notary.');
+  const el = document.getElementById('blog-list');
+  el.innerHTML = BLOG_POSTS.map(p => `
+    <div class="blog-item" onclick="navRoute('#/blog/${p.slug}')">
+      <div class="blog-item-title">${escapeHTML(p.title)}</div>
+      <div class="blog-item-excerpt">${escapeHTML(p.excerpt)}</div>
+      <div class="blog-item-meta">${new Date(p.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+    </div>`).join('');
+}
+
+function renderBlogMarkdown(body) {
+  const lines = body.split('\n');
+  let html = '', inList = false;
+  const flush = () => { if (inList) { html += '</ul>'; inList = false; } };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { flush(); continue; }
+    if (line.startsWith('## ')) { flush(); html += `<h2>${escapeHTML(line.slice(3))}</h2>`; }
+    else if (line.startsWith('- ')) { if (!inList) { html += '<ul>'; inList = true; } html += `<li>${escapeHTML(line.slice(2))}</li>`; }
+    else { flush(); html += `<p>${escapeHTML(line)}</p>`; }
+  }
+  flush();
+  return html;
+}
+
+function renderBlogPost(slug) {
+  const post = BLOG_POSTS.find(p => p.slug === slug);
+  if (!post) { renderBlogList(); return; }
+  goTo('blog-post');
+  setSeoMeta(`${post.title} — NotaryFinder Blog`, post.excerpt);
+  document.getElementById('blog-article').innerHTML =
+    `<h1>${escapeHTML(post.title)}</h1>` +
+    `<div class="blog-meta">${new Date(post.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>` +
+    renderBlogMarkdown(post.body);
 }
 
 /* ---- Feature 60: Email signature generator ---- */
