@@ -1392,6 +1392,17 @@
             <textarea id="jf-notes" class="field-textarea" placeholder="Parking instructions, building access, witnesses needed, language preference…"></textarea>
           </div>
 
+          <div class="field">
+            <label class="field-label" for="jf-recurrence">Repeat <span style="color:#ccc;font-weight:400;">(optional)</span></label>
+            <select id="jf-recurrence" class="field-input">
+              <option value="none">None — one-time job</option>
+              <option value="weekly">Weekly</option>
+              <option value="biweekly">Bi-weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+            <div class="price-help" style="margin-top:7px;">We'll auto-post the next job at this interval after each one is completed.</div>
+          </div>
+
           <div class="step-foot">
             <span class="step-foot-meta">Step 3 of 5</span>
             <div class="step-foot-actions">
@@ -2293,6 +2304,23 @@ function jobPrimaryService(job) {
   return list[0] || 'Other';
 }
 
+/* Shift a datetime-local string forward by a recurrence interval. */
+function shiftDateByRecurrence(dateStr, recurrence) {
+  const base = dateStr ? new Date(dateStr) : new Date();
+  if (isNaN(base.getTime())) return dateStr;
+  if (recurrence === 'weekly')   base.setDate(base.getDate() + 7);
+  else if (recurrence === 'biweekly') base.setDate(base.getDate() + 14);
+  else if (recurrence === 'monthly')  base.setMonth(base.getMonth() + 1);
+  else return dateStr;
+  // Return in datetime-local format (YYYY-MM-DDTHH:mm), local time.
+  const pad = n => String(n).padStart(2, '0');
+  return `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}T${pad(base.getHours())}:${pad(base.getMinutes())}`;
+}
+
+function isRecurring(job) {
+  return job.recurrence && job.recurrence !== 'none';
+}
+
 /* ================================================================
    Routing — same goTo() pattern as the original mockup
    ================================================================ */
@@ -2590,6 +2618,8 @@ $jobForm.addEventListener('submit', async e => {
     notes: $notes.value.trim(),
     startingPrice: +$price.value,
     suggestedPrice: calculateSuggestedPrice(services, $signatures.value, currentPref),
+    recurrence: document.getElementById('jf-recurrence')?.value || 'none',
+    recurrenceParentId: null,
     status: 'open',
     acceptedBidId: null,
     postedAt: Date.now(),
@@ -2766,7 +2796,7 @@ function renderMyJob(opts = {}) {
     <div class="card job-summary">
       <div class="job-summary-head">
         <div>
-          <div class="job-summary-title">${jobServiceLabel(job)} · ${job.signatures} signature${job.signatures !== 1 ? 's' : ''}</div>
+          <div class="job-summary-title">${jobServiceLabel(job)} · ${job.signatures} signature${job.signatures !== 1 ? 's' : ''} ${isRecurring(job) ? `<span class="job-tag" style="background:#eef6ff;color:#2f6bd0;border-color:#cfe2fb;vertical-align:middle;">↻ Recurring</span>` : ''}</div>
           <div class="job-summary-meta">
             <span>${job.location}</span> · <span>${formatDateTime(job.dateTime)}</span>
           </div>
@@ -3068,6 +3098,7 @@ function renderDashboard() {
             <div class="job-card-tags">
               <span class="job-tag">${job.notaryPreference}</span>
               <span class="job-tag">${formatDateTime(job.dateTime)}</span>
+              ${isRecurring(job) ? `<span class="job-tag" style="background:#eef6ff;color:#2f6bd0;border-color:#cfe2fb;">↻ Recurring</span>` : ''}
               ${job.isUserJob ? '<span class="job-tag" style="background:#000;color:#fff;">Your customer</span>' : ''}
             </div>
           </div>
@@ -3890,7 +3921,9 @@ function jobToRow(job) {
     starting_price:   job.startingPrice,
     suggested_price:  job.suggestedPrice,
     status:           job.status,
-    accepted_bid_id:  job.acceptedBidId || null
+    accepted_bid_id:  job.acceptedBidId || null,
+    recurrence:       job.recurrence || 'none',
+    recurrence_parent_id: job.recurrenceParentId || null
   };
 }
 
@@ -3913,6 +3946,8 @@ function rowToJob(row) {
     suggestedPrice:   Number(row.suggested_price) || 0,
     status:                row.status || 'open',
     acceptedBidId:         row.accepted_bid_id || null,
+    recurrence:            row.recurrence || 'none',
+    recurrenceParentId:    row.recurrence_parent_id || null,
     documentFilePath:      row.document_file_path || null,
     signedDocumentFilePath: row.signed_document_file_path || null,
     customerId:            row.customer_id || null,
@@ -4149,6 +4184,9 @@ async function sbCompleteJob(jobId) {
   job.status = 'completed';
   saveState();
   renderMyJob();
+
+  // Recurring jobs spawn the next instance automatically.
+  if (isRecurring(job)) createRecurringNextInstance(job);
   if (sb && sbUser) {
     try {
       const { error } = await sb.from('jobs').update({ status: 'completed' }).eq('id', jobId);
@@ -4169,6 +4207,39 @@ async function sbCompleteJob(jobId) {
     });
     openReviewModal(jobId, acceptedBid.notaryId, acceptedBid.notaryName);
   }
+}
+
+/* Create the next instance of a recurring job once one is completed.
+   Same fields, date_time shifted by the recurrence interval. */
+function createRecurringNextInstance(job) {
+  const next = {
+    id: uid('j'),
+    customerName: job.customerName,
+    customerEmail: job.customerEmail,
+    services: jobServices(job).slice(),
+    serviceType: job.serviceType || jobPrimaryService(job),
+    signatures: job.signatures,
+    numSigners: job.numSigners || 1,
+    notaryPreference: job.notaryPreference,
+    location: job.location,
+    locationLat: job.locationLat ?? null,
+    locationLng: job.locationLng ?? null,
+    dateTime: shiftDateByRecurrence(job.dateTime, job.recurrence),
+    notes: job.notes || '',
+    startingPrice: job.startingPrice,
+    suggestedPrice: job.suggestedPrice,
+    recurrence: job.recurrence,
+    recurrenceParentId: job.recurrenceParentId || job.id,
+    status: 'open',
+    acceptedBidId: null,
+    customerId: job.customerId || null,
+    postedAt: Date.now(),
+    isUserJob: job.isUserJob
+  };
+  STATE.jobs.push(next);
+  saveState();
+  if (sb && sbUser) sbSaveJob(next).catch(err => console.warn('[Supabase] recurring job save:', err));
+  toast('Next recurring job posted');
 }
 
 /* INSERT a review — DB trigger handles rating recalculation */
