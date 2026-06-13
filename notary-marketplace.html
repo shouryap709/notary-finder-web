@@ -1683,6 +1683,10 @@
         </div>
       </div>
 
+      <div class="tabs" style="margin-bottom:10px;">
+        <button class="tab-btn active" id="dash-tab-all" onclick="setPinnedTab(false)">All jobs</button>
+        <button class="tab-btn" id="dash-tab-pinned" onclick="setPinnedTab(true)">📌 Pinned</button>
+      </div>
       <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;">
         <span>Available jobs <span class="count" id="dash-job-count"></span></span>
         <select id="dash-spec-filter" onchange="feedSpecFilter=this.value;renderDashboard()" style="font-family:inherit;font-size:9px;padding:3px 6px;border:1px solid #e6e6e6;border-radius:6px;color:#666;">
@@ -3577,7 +3581,7 @@ function renderDashboard() {
   // Featured + direct invitations float to the top of the feed.
   const myNotaryId = sbUser?.id || STATE.notaryUser.id;
   const isInvited = j => j.invitedNotaryId && j.invitedNotaryId === myNotaryId;
-  const rank = j => (isFeatured(j) ? 2 : 0) + (isInvited(j) ? 1 : 0);
+  const rank = j => (isPinned(j.id) ? 4 : 0) + (isFeatured(j) ? 2 : 0) + (isInvited(j) ? 1 : 0);
   filteredJobs = filteredJobs
     .map((j, i) => ({ j, i }))
     .sort((a, b) => (rank(b.j) - rank(a.j)) || (a.i - b.i))
@@ -3589,6 +3593,13 @@ function renderDashboard() {
   }
   const _specSel = document.getElementById('dash-spec-filter');
   if (_specSel) _specSel.value = feedSpecFilter;
+
+  // Pinned tab — show only pinned jobs.
+  if (showPinnedOnly) filteredJobs = filteredJobs.filter(j => isPinned(j.id));
+  const _allTab = document.getElementById('dash-tab-all');
+  const _pinTab = document.getElementById('dash-tab-pinned');
+  if (_allTab) _allTab.classList.toggle('active', !showPinnedOnly);
+  if (_pinTab) _pinTab.classList.toggle('active', showPinnedOnly);
 
   // Out of office — hide all open jobs and surface a return banner.
   const oooBanner = document.getElementById('dash-distance-banner');
@@ -3669,6 +3680,7 @@ function renderDashboard() {
             </div>
           </div>
           <div class="job-card-right">
+            <button onclick="togglePin('${job.id}')" title="Pin job" style="background:none;border:none;cursor:pointer;font-size:15px;line-height:1;color:${isPinned(job.id) ? '#d9a017' : '#ccc'};padding:0 0 4px;">${isPinned(job.id) ? '★' : '☆'}</button>
             <div class="job-ceiling-label">Customer's max</div>
             <div class="job-ceiling">$${job.startingPrice}</div>
           </div>
@@ -3949,6 +3961,23 @@ async function instantBook(jobId) {
 let activeBidsTab = 'active';
 let showAllJobs   = false;
 let feedSpecFilter = '';   // service-type filter from the specialization dropdown
+let showPinnedOnly = false; // "Pinned" tab on the dashboard
+
+function isPinned(jobId) { return (STATE.pinnedJobIds || []).includes(jobId); }
+function togglePin(jobId) {
+  STATE.pinnedJobIds = STATE.pinnedJobIds || [];
+  const i = STATE.pinnedJobIds.indexOf(jobId);
+  if (i >= 0) {
+    STATE.pinnedJobIds.splice(i, 1);
+    if (sb && sbUser) sb.from('notary_pinned_jobs').delete().eq('notary_id', sbUser.id).eq('job_id', jobId).then(() => {}, () => {});
+  } else {
+    STATE.pinnedJobIds.push(jobId);
+    if (sb && sbUser) sb.from('notary_pinned_jobs').insert({ notary_id: sbUser.id, job_id: jobId }).then(() => {}, () => {});
+  }
+  saveState();
+  renderDashboard();
+}
+function setPinnedTab(on) { showPinnedOnly = on; renderDashboard(); }
 
 document.getElementById('bid-tabs').addEventListener('click', e => {
   const btn = e.target.closest('.tab-btn');
@@ -4177,6 +4206,13 @@ async function submitNotaryLogin() {
       .then(({ data }) => {
         if (Array.isArray(data) && data.length) {
           STATE.bidTemplates = data.map(r => ({ id: r.id, label: r.label, message: r.message || '' }));
+          saveState();
+        }
+      }, () => {});
+    sb.from('notary_pinned_jobs').select('job_id').eq('notary_id', sbUser.id)
+      .then(({ data }) => {
+        if (Array.isArray(data)) {
+          STATE.pinnedJobIds = data.map(r => r.job_id);
           saveState();
         }
       }, () => {});
