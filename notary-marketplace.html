@@ -1434,6 +1434,21 @@
   }
   .time-chip:hover { border-color: #000; color: #000; }
   .time-chip.on { background: #000; color: #fff; border-color: #000; }
+
+  /* ---- Staff dashboard ---- */
+  .staff-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+  @media (max-width: 520px) { .staff-stats { grid-template-columns: repeat(2, 1fr); } }
+  .staff-stat { border: 1px solid #eee; border-radius: 10px; padding: 13px; }
+  .staff-stat .lbl { font-size: 8.5px; text-transform: uppercase; letter-spacing: .5px; color: #aaa; font-weight: 600; }
+  .staff-stat .val { font-size: 22px; font-weight: 600; color: #111; margin-top: 5px; letter-spacing: -.5px; }
+  .staff-section { margin-bottom: 22px; }
+  .staff-section-title { font-size: 11px; font-weight: 600; color: #111; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+  .staff-row { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f2f2f2; font-size: 11px; }
+  .staff-row:last-child { border-bottom: none; }
+  .staff-row .muted { color: #999; }
+  .staff-empty { font-size: 10.5px; color: #bbb; padding: 8px 0; }
+  .staff-link { display: inline-block; border: 1px solid #e2e2e2; border-radius: 7px; padding: 7px 12px; font-size: 11px; color: #555; cursor: pointer; background: #fff; }
+  .staff-link:hover { border-color: #000; color: #000; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1470,6 +1485,7 @@
         <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
         <button class="nav-btn" onclick="navRoute('#/notaries')">Browse Notaries</button>
+        <button class="nav-btn" id="staff-nav-link" style="display:none" onclick="navRoute('#/staff')">Staff</button>
       </nav>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle" id="mode-toggle">
@@ -2215,6 +2231,29 @@
       <button class="btn btn-primary btn-sm" onclick="window.print()">Print / Save as PDF</button>
     </div>
     <div id="cert-body" class="cert-sheet"></div>
+  </div>
+
+  <!-- ============================================================
+       PAGE: PRINT N' PARCEL STAFF DASHBOARD  (#/staff)
+       ============================================================ -->
+  <div class="page" id="staff">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <nav class="nav" data-mode-nav="customer">
+        <button class="nav-btn" onclick="goTo('home')">Home</button>
+        <button class="nav-btn active" onclick="navRoute('#/staff')">Staff</button>
+      </nav>
+      <div class="mode-toggle">
+        <button data-mode="customer" class="on">Customer</button>
+        <button data-mode="notary">Notary</button>
+      </div>
+    </div>
+    <div class="form-shell">
+      <div class="page-title">Staff dashboard</div>
+      <div class="page-subtitle">Internal Print N' Parcel overview. Read-only.</div>
+      <div id="staff-body"><div class="dir-empty">Loading…</div></div>
+    </div>
   </div>
 
   <!-- ============================================================
@@ -5513,7 +5552,10 @@ async function loadCustomerTier() {
   if (!sb || !sbUser) return;
   try {
     const { data } = await sb.from('profiles')
-      .select('tier, role, full_name, recent_services').eq('id', sbUser.id).maybeSingle();
+      .select('tier, role, full_name, recent_services, is_pnp_staff').eq('id', sbUser.id).maybeSingle();
+    if (data?.is_pnp_staff) {
+      document.getElementById('staff-nav-link').style.display = '';
+    }
     if (!data || data.role !== 'customer') return;
     window.customerTier = data.tier || 'standard';
     renderCustomerTierStrip(data.full_name);
@@ -5748,6 +5790,79 @@ async function renderCertificate(jobId) {
         This document records that a notarization took place; it is not the notarized document itself.
       </div>
     </div>`;
+}
+
+/* ---- Feature 65: Print N' Parcel staff dashboard ---- */
+registerRoute(/^#\/staff$/, () => renderStaffDashboard());
+
+async function renderStaffDashboard() {
+  goTo('staff');
+  const root = document.getElementById('staff-body');
+  if (!root) return;
+
+  const now = new Date();
+  const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
+  const startWeek = new Date(startToday); startWeek.setDate(startToday.getDate() - startToday.getDay());
+  const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  let jobs = [], bids = [], pending = [];
+  if (sb) {
+    try {
+      const [jRes, bRes, pRes] = await Promise.all([
+        sb.from('jobs').select('id,status,created_at,accepted_bid_id,suggested_price,starting_price,service_type').order('created_at', { ascending: false }),
+        sb.from('bids').select('id,price,created_at,profiles!bids_notary_id_fkey(full_name)').order('created_at', { ascending: false }).limit(8),
+        sb.from('profiles').select('id,full_name,created_at').eq('role', 'notary').eq('verification_status', 'pending').limit(8)
+      ]);
+      jobs = jRes.data || [];
+      bids = bRes.data || [];
+      pending = pRes.data || [];
+    } catch (e) { /* fall back below */ }
+  }
+  if (jobs.length === 0 && !sb) {
+    jobs = STATE.jobs.map(j => ({ status: j.status, created_at: new Date(j.postedAt || Date.now()).toISOString(), accepted_bid_id: j.acceptedBidId, suggested_price: j.suggestedPrice, starting_price: j.startingPrice, service_type: j.serviceType }));
+    bids = STATE.bids.slice(0, 8).map(b => ({ price: b.price, created_at: new Date(b.placedAt).toISOString(), profiles: { full_name: b.notaryName } }));
+  }
+
+  const since = d => jobs.filter(j => new Date(j.created_at) >= d).length;
+  const completed = jobs.filter(j => j.status === 'completed');
+  const priceOf = j => Number(j.suggested_price || j.starting_price || 0);
+  const revenue = completed.reduce((s, j) => s + priceOf(j) * 0.10, 0);
+
+  const fmtDate = s => new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  root.innerHTML = `
+    <div class="staff-stats">
+      <div class="staff-stat"><div class="lbl">Jobs today</div><div class="val">${since(startToday)}</div></div>
+      <div class="staff-stat"><div class="lbl">This week</div><div class="val">${since(startWeek)}</div></div>
+      <div class="staff-stat"><div class="lbl">This month</div><div class="val">${since(startMonth)}</div></div>
+    </div>
+
+    <div class="staff-section">
+      <div class="staff-section-title">Revenue (10% platform fee)</div>
+      <div class="staff-stat"><div class="lbl">From ${completed.length} completed jobs</div><div class="val">$${revenue.toFixed(2)}</div></div>
+    </div>
+
+    <div class="staff-section">
+      <div class="staff-section-title">Recent bids placed</div>
+      ${bids.length ? bids.map(b => `
+        <div class="staff-row"><span>${escapeHTML(b.profiles?.full_name || 'Notary')}</span><span class="muted">$${b.price} · ${fmtDate(b.created_at)}</span></div>`).join('')
+        : '<div class="staff-empty">No recent bids.</div>'}
+    </div>
+
+    <div class="staff-section">
+      <div class="staff-section-title">Recent jobs completed</div>
+      ${completed.length ? completed.slice(0, 8).map(j => `
+        <div class="staff-row"><span>${escapeHTML(j.service_type || 'Job')}</span><span class="muted">$${priceOf(j)} · ${fmtDate(j.created_at)}</span></div>`).join('')
+        : '<div class="staff-empty">No completed jobs yet.</div>'}
+    </div>
+
+    <div class="staff-section">
+      <div class="staff-section-title">Notaries pending verification</div>
+      ${pending.length ? pending.map(p => `
+        <div class="staff-row"><span>${escapeHTML(p.full_name || 'Notary')}</span><button class="staff-link" onclick="openNotaryProfile('${p.id}')">Verify →</button></div>`).join('')
+        : '<div class="staff-empty">No notaries awaiting verification.</div>'}
+    </div>
+  `;
 }
 
 /* ---- Feature 64: Smart suggested time slots ---- */
