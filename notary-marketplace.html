@@ -1210,6 +1210,25 @@
   }
   .tier-strip .tier-perk { font-size: 10.5px; color: #888; margin-top: 6px; }
   .tier-strip .tier-name { font-size: 12px; font-weight: 600; color: #222; }
+
+  /* ---- Cookie consent banner ---- */
+  .cookie-banner {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 60;
+    background: #111; color: #eee; padding: 14px 18px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    transform: translateY(110%); transition: transform .32s cubic-bezier(.4,0,.2,1);
+  }
+  .cookie-banner.show { transform: translateY(0); }
+  .cookie-banner p { font-size: 11px; line-height: 1.5; margin: 0; flex: 1 1 280px; color: #cfcfcf; }
+  .cookie-banner .cookie-acts { display: flex; gap: 8px; flex: 0 0 auto; }
+  .cookie-banner button {
+    border: 1px solid #444; background: transparent; color: #eee;
+    font-size: 11px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    transition: background .14s, border-color .14s;
+  }
+  .cookie-banner button.accept { background: #fff; color: #111; border-color: #fff; }
+  .cookie-banner button.accept:hover { background: #e8e8e8; }
+  .cookie-banner button.decline:hover { border-color: #888; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1288,6 +1307,8 @@
       <a data-legal="privacy" href="#" target="_blank" rel="noopener">Privacy</a>
       <span class="sep">|</span>
       <span>Contact: <a href="mailto:hello@printnparcel.com">hello@printnparcel.com</a></span>
+      <span class="sep">|</span>
+      <a href="#" onclick="openCookieBanner();return false;">Cookie settings</a>
     </div>
   </div>
 
@@ -1906,6 +1927,15 @@
     </div>
     <div class="np-list" id="np-list">
       <div class="np-empty">No notifications yet.</div>
+    </div>
+  </div>
+
+  <!-- Cookie consent banner -->
+  <div class="cookie-banner" id="cookie-banner">
+    <p>We use cookies and local storage to keep you signed in and remember your preferences.</p>
+    <div class="cookie-acts">
+      <button class="decline" onclick="setCookieConsent('declined')">Decline</button>
+      <button class="accept" onclick="setCookieConsent('accepted')">Accept</button>
     </div>
   </div>
 
@@ -4966,6 +4996,33 @@ function renderCustomerTierStrip(name) {
   el.style.display = 'block';
 }
 
+/* ---- Feature 52: Cookie consent banner ---- */
+function applyCookieConsent(choice) {
+  if (choice === 'declined' && window.posthog && window.POSTHOG_KEY) {
+    try { posthog.opt_out_capturing(); } catch (e) {}
+  }
+}
+
+function setCookieConsent(choice) {
+  try { localStorage.setItem('cookieConsent', choice); } catch (e) {}
+  applyCookieConsent(choice);
+  document.getElementById('cookie-banner')?.classList.remove('show');
+}
+
+function openCookieBanner() {
+  document.getElementById('cookie-banner')?.classList.add('show');
+}
+
+function initCookieConsent() {
+  let choice = null;
+  try { choice = localStorage.getItem('cookieConsent'); } catch (e) {}
+  if (!choice) {
+    setTimeout(openCookieBanner, 700);
+  } else {
+    applyCookieConsent(choice);
+  }
+}
+
 /* ================================================================
    Boot
    ================================================================ */
@@ -5005,6 +5062,7 @@ function renderCustomerTierStrip(name) {
   });
 
   setLegalLinks();
+  initCookieConsent();
   seedIfEmpty();
   renderStepper();
   updateSuggested();
