@@ -3707,12 +3707,16 @@ function renderMyBidsList() {
         </div>
         ${b.status === 'pending' && job && job.status === 'open'
           ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);">
-               <button class="btn btn-ghost btn-sm" onclick="cancelBid('${b.id}')">Withdraw bid</button>
+               ${retractRemainingMs(b) > 0
+                 ? `<button class="btn btn-secondary btn-sm" onclick="retractBid('${b.id}')">Retract within <span class="retract-countdown" data-bid="${b.id}">${fmtCountdown(retractRemainingMs(b))}</span></button>`
+                 : `<button class="btn btn-ghost btn-sm" onclick="cancelBid('${b.id}')">Withdraw bid</button>`}
              </div>`
           : ''}
       </div>
     `;
   }).join('');
+
+  startRetractTimer();
 }
 
 /* ================================================================
@@ -4665,6 +4669,50 @@ async function sbCancelBid(bidId) {
     sentryCapture(e);
     console.warn('[Supabase] cancel bid:', e);
   }
+}
+
+/* ----- Clean bid retraction (5-minute, no-penalty window) ----- */
+const RETRACT_WINDOW_MS = 5 * 60 * 1000;
+let retractTimer = null;
+
+function retractRemainingMs(bid) {
+  return Math.max(0, RETRACT_WINDOW_MS - (Date.now() - bid.placedAt));
+}
+function fmtCountdown(ms) {
+  const s = Math.ceil(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+function retractBid(bidId) {
+  const bid = STATE.bids.find(b => b.id === bidId);
+  if (!bid || bid.status !== 'pending') return;
+  if (retractRemainingMs(bid) <= 0) { cancelBid(bidId); return; }
+  // Clean removal — no cancellation record, no penalty.
+  STATE.bids = STATE.bids.filter(b => b.id !== bidId);
+  saveState();
+  if (sb && sbUser && !bidId.startsWith('b-') && !/^b\d/.test(bidId)) {
+    sb.from('bids').delete().eq('id', bidId).then(() => {}, () => {});
+  }
+  toast('Bid retracted');
+  renderMyBids();
+}
+/* Tick countdowns on the My Bids page; re-render when a window closes. */
+function startRetractTimer() {
+  if (retractTimer) return;
+  retractTimer = setInterval(() => {
+    if (!document.getElementById('my-bids').classList.contains('active')) {
+      clearInterval(retractTimer); retractTimer = null; return;
+    }
+    const spans = document.querySelectorAll('.retract-countdown');
+    if (spans.length === 0) { clearInterval(retractTimer); retractTimer = null; return; }
+    let needsRerender = false;
+    spans.forEach(span => {
+      const bid = STATE.bids.find(b => b.id === span.dataset.bid);
+      const ms = bid ? retractRemainingMs(bid) : 0;
+      if (ms <= 0) needsRerender = true;
+      else span.textContent = fmtCountdown(ms);
+    });
+    if (needsRerender) renderMyBidsList();
+  }, 1000);
 }
 
 function cancelBid(bidId) {
