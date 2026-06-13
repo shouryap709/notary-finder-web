@@ -1601,7 +1601,7 @@
         <div class="stat-card">
           <div class="stat-label">Earnings This Week</div>
           <div class="stat-value" id="stat-earnings">—</div>
-          <div class="stat-value-sub">From accepted jobs</div>
+          <div class="stat-value-sub" id="stat-earnings-sub">From accepted jobs</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Your Rating</div>
@@ -1810,6 +1810,16 @@
       <div class="modal-body">
         <div class="review-stars-row" id="rev-stars">
           <!-- Populated by buildReviewStars() -->
+        </div>
+        <div class="field" style="margin-top:12px;margin-bottom:0;">
+          <label class="field-label">Add a tip? <span style="color:#ccc;font-weight:400;">(optional)</span></label>
+          <div id="rev-tip-row" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <button type="button" class="radio-pill" data-tip="5" onclick="setTip(5)">$5</button>
+            <button type="button" class="radio-pill" data-tip="10" onclick="setTip(10)">$10</button>
+            <button type="button" class="radio-pill" data-tip="20" onclick="setTip(20)">$20</button>
+            <button type="button" class="radio-pill" data-tip="custom" onclick="setTip('custom')">Custom</button>
+            <input type="number" id="rev-tip-custom" class="field-input" min="0" max="999" placeholder="$" style="display:none;max-width:80px;">
+          </div>
         </div>
         <div class="field" style="margin-top:12px;margin-bottom:0;">
           <label class="field-label" for="rev-comment">Anything to add? <span style="color:#ccc;font-weight:400;">(optional)</span></label>
@@ -3011,6 +3021,14 @@ function renderDashboard() {
   document.getElementById('stat-won').textContent = wonBids.length;
   document.getElementById('stat-earnings').textContent = '$' + weekEarnings;
 
+  // Tips earned across all won jobs (separate line).
+  const wonJobIds = new Set(wonBids.map(b => b.jobId));
+  const totalTips = STATE.jobs
+    .filter(j => wonJobIds.has(j.id))
+    .reduce((sum, j) => sum + (Number(j.tipAmount) || 0), 0);
+  const earnSub = document.getElementById('stat-earnings-sub');
+  if (earnSub) earnSub.textContent = totalTips > 0 ? `incl. $${totalTips} in tips` : 'From accepted jobs';
+
   const demoNotary = STATE.notaries.find(n => n.id === STATE.notaryUser.id);
   const myRating      = notarySession?._rating       ?? demoNotary?.rating   ?? 5.0;
   const myReviewCount = notarySession?._reviewsCount ?? demoNotary?.reviews   ?? 0;
@@ -4185,6 +4203,7 @@ function rowToJob(row) {
     recurrence:            row.recurrence || 'none',
     recurrenceParentId:    row.recurrence_parent_id || null,
     allowInstantBook:      !!row.allow_instant_book,
+    tipAmount:             Number(row.tip_amount) || 0,
     documentFilePath:      row.document_file_path || null,
     signedDocumentFilePath: row.signed_document_file_path || null,
     customerId:            row.customer_id || null,
@@ -4955,7 +4974,22 @@ function toast(msg) {
 /* ================================================================
    REVIEW MODAL
    ================================================================ */
-let _reviewState = { jobId: null, notaryId: null, notaryName: null, rating: 0 };
+let _reviewState = { jobId: null, notaryId: null, notaryName: null, rating: 0, tip: 0 };
+
+function setTip(val) {
+  const row = document.getElementById('rev-tip-row');
+  const custom = document.getElementById('rev-tip-custom');
+  row.querySelectorAll('.radio-pill').forEach(p => p.classList.toggle('on', p.dataset.tip == val));
+  if (val === 'custom') {
+    custom.style.display = 'block';
+    custom.focus();
+    _reviewState.tip = Math.max(0, +custom.value || 0);
+    custom.oninput = () => { _reviewState.tip = Math.max(0, +custom.value || 0); };
+  } else {
+    custom.style.display = 'none';
+    _reviewState.tip = +val;
+  }
+}
 
 function buildReviewStars() {
   const row = document.getElementById('rev-stars');
@@ -4976,10 +5010,14 @@ function buildReviewStars() {
 
 function openReviewModal(jobId, notaryId, notaryName) {
   if (!sb) return;  // gracefully skip when Supabase not configured
-  _reviewState = { jobId, notaryId, notaryName, rating: 0 };
+  _reviewState = { jobId, notaryId, notaryName, rating: 0, tip: 0 };
   document.getElementById('rev-notary-name').textContent = notaryName || 'your notary';
   document.getElementById('rev-stars').querySelectorAll('.star-btn')
     .forEach(b => b.classList.remove('on'));
+  const tipRow = document.getElementById('rev-tip-row');
+  if (tipRow) tipRow.querySelectorAll('.radio-pill').forEach(p => p.classList.remove('on'));
+  const tipCustom = document.getElementById('rev-tip-custom');
+  if (tipCustom) { tipCustom.style.display = 'none'; tipCustom.value = ''; }
   document.getElementById('rev-comment').value = '';
   document.getElementById('rev-error').style.display = 'none';
   document.getElementById('rev-submit').disabled = true;
@@ -5190,8 +5228,15 @@ document.getElementById('rev-submit').addEventListener('click', async () => {
       rating:   _reviewState.rating,
       comment:  document.getElementById('rev-comment').value.trim()
     });
+    // Save tip on the job (optional).
+    const tip = Math.max(0, +_reviewState.tip || 0);
+    if (tip > 0) {
+      const tJob = STATE.jobs.find(j => j.id === _reviewState.jobId);
+      if (tJob) { tJob.tipAmount = tip; saveState(); }
+      if (sb && sbUser) sb.from('jobs').update({ tip_amount: tip }).eq('id', _reviewState.jobId).then(() => {}, () => {});
+    }
     closeReviewModal();
-    toast('Review submitted — thank you!');
+    toast(tip > 0 ? `Review submitted — $${tip} tip added!` : 'Review submitted — thank you!');
     renderMyJob();
   } catch (err) {
     const msg = (err?.message || '').toLowerCase();
