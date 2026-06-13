@@ -5,16 +5,21 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import Button from '../components/Button';
 import { theme } from '../theme';
+import { signOut } from '../lib/supabase';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
+  async function handleSignOut() {
+    try { await signOut(); } catch {}
+    navigation.reset({ index: 0, routes: [{ name: 'Auth' }] });
+  }
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.body}>
         <Text style={styles.title}>Settings</Text>
         <Text style={styles.sub}>App settings will appear here. (placeholder)</Text>
-        <Button title="Sign out" variant="secondary" onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Auth' }] })} style={styles.btn} />
+        <Button title="Sign out" variant="secondary" onPress={handleSignOut} style={styles.btn} />
       </View>
     </SafeAreaView>
   );

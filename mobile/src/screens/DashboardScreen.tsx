@@ -1,34 +1,75 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
-import Button from '../components/Button';
+import JobCard from '../components/JobCard';
 import { theme } from '../theme';
+import { fetchOpenJobs, Job } from '../lib/supabase';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
 export default function DashboardScreen({ navigation }: Props) {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await fetchOpenJobs();
+      setJobs(data);
+    } catch (e) {
+      // network/offline — keep whatever we have
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+          <Text style={styles.headerLink}>Profile</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safe, styles.center]} edges={['bottom']}>
+        <ActivityIndicator color={theme.colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <View style={styles.body}>
-        <Text style={styles.title}>Open jobs</Text>
-        <Text style={styles.sub}>Job feed will appear here. (placeholder)</Text>
-        <View style={styles.actions}>
-          <Button title="View a job" onPress={() => navigation.navigate('JobDetail', { jobId: 'demo' })} style={styles.btn} />
-          <Button title="My profile" variant="secondary" onPress={() => navigation.navigate('Profile')} style={styles.btn} />
-          <Button title="Settings" variant="secondary" onPress={() => navigation.navigate('Settings')} style={styles.btn} />
-        </View>
-      </View>
+      <FlatList
+        data={jobs}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
+        ListEmptyComponent={<Text style={styles.empty}>No open jobs right now. Pull to refresh.</Text>}
+        renderItem={({ item }) => (
+          <JobCard
+            job={item}
+            onPress={() => navigation.navigate('JobDetail', { jobId: item.id })}
+            onBid={() => navigation.navigate('BidPlacement', { jobId: item.id })}
+          />
+        )}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
-  body: { flex: 1, padding: 22 },
-  title: { fontSize: 18, fontWeight: '600', color: theme.colors.text },
-  sub: { fontSize: 12, color: theme.colors.muted, marginTop: 6, marginBottom: 24 },
-  actions: { marginTop: 'auto', gap: 10 },
-  btn: {},
+  center: { justifyContent: 'center', alignItems: 'center' },
+  list: { padding: 18 },
+  empty: { textAlign: 'center', color: theme.colors.muted, fontSize: 12, marginTop: 60 },
+  headerLink: { color: theme.colors.text, fontSize: 13, fontWeight: '600' },
 });
