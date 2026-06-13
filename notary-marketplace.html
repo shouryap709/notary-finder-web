@@ -1325,6 +1325,19 @@
   .cl-date { font-size: 8.5px; text-transform: uppercase; letter-spacing: .5px; color: #aaa; font-weight: 600; }
   .cl-title { font-size: 12px; font-weight: 600; color: #111; margin: 3px 0 4px; }
   .cl-body { font-size: 10.5px; color: #777; line-height: 1.6; }
+
+  /* ---- Newsletter signup ---- */
+  .newsletter { max-width: 380px; margin: 28px auto 0; text-align: center; padding: 0 18px; }
+  .newsletter-title { font-size: 12.5px; font-weight: 600; color: #222; }
+  .newsletter-sub { font-size: 10px; color: #999; margin-top: 3px; }
+  .newsletter-form { display: flex; gap: 8px; margin-top: 12px; }
+  .newsletter-form input {
+    flex: 1; padding: 9px 12px; border: 1px solid #e2e2e2; border-radius: 9px;
+    font-size: 11.5px; outline: none; transition: border-color .14s;
+  }
+  .newsletter-form input:focus { border-color: #000; }
+  .newsletter-msg { font-size: 10.5px; color: #1f8a3b; margin-top: 8px; min-height: 14px; }
+  .newsletter-msg.error { color: var(--accent-red, #e53935); }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1396,6 +1409,16 @@
           <div class="hiw-desc">Pick your notary by price, rating, or distance.</div>
         </div>
       </div>
+    </div>
+
+    <div class="newsletter">
+      <div class="newsletter-title">Get tips for getting documents notarized</div>
+      <div class="newsletter-sub">A short, useful monthly newsletter. No spam.</div>
+      <form class="newsletter-form" id="newsletter-form" onsubmit="return submitNewsletter(event)">
+        <input type="email" id="newsletter-email" placeholder="you@email.com" required />
+        <button type="submit" class="btn btn-primary btn-sm">Subscribe</button>
+      </form>
+      <div class="newsletter-msg" id="newsletter-msg"></div>
     </div>
 
     <div class="home-footer">
@@ -5462,6 +5485,31 @@ function initChangelogDot() {
   if (changelogLatestDate() > seen) {
     document.getElementById('changelog-dot')?.classList.add('show');
   }
+}
+
+/* ---- Feature 57: Newsletter signup ---- */
+async function submitNewsletter(e) {
+  e.preventDefault();
+  const input = document.getElementById('newsletter-email');
+  const msg = document.getElementById('newsletter-msg');
+  const email = (input.value || '').trim().toLowerCase();
+  if (!email) return false;
+  msg.className = 'newsletter-msg';
+  if (!sb) {
+    msg.textContent = "Thanks! You're in.";
+    input.value = '';
+    return false;
+  }
+  try {
+    const { error } = await sb.from('newsletter_signups').insert({ email });
+    if (error && !/duplicate|unique/i.test(error.message)) throw error;
+    msg.textContent = "Thanks! You're in.";
+    input.value = '';
+  } catch (err) {
+    msg.className = 'newsletter-msg error';
+    msg.textContent = 'Something went wrong — please try again.';
+  }
+  return false;
 }
 
 /* ================================================================
