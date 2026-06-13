@@ -1359,6 +1359,12 @@
     padding: 6px 13px; border-radius: 20px; cursor: pointer; transition: border-color .14s, color .14s;
   }
   .recent-chip:hover { border-color: #000; color: #000; }
+
+  /* ---- Email signature generator ---- */
+  .esig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 620px) { .esig-grid { grid-template-columns: 1fr; } }
+  .esig-preview-label { font-size: 8.5px; text-transform: uppercase; letter-spacing: .6px; color: #bbb; font-weight: 600; margin-bottom: 8px; }
+  .esig-preview { border: 1px solid #eee; border-radius: 10px; padding: 16px; background: #fafafa; min-height: 90px; overflow-x: auto; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -2098,6 +2104,38 @@
       <button class="btn btn-primary btn-sm" onclick="window.print()">Print / Save as PDF</button>
     </div>
     <div id="cert-body" class="cert-sheet"></div>
+  </div>
+
+  <!-- ============================================================
+       PAGE: EMAIL SIGNATURE GENERATOR  (#/tools/email-signature)
+       ============================================================ -->
+  <div class="page" id="tools-email-signature">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <div class="mode-toggle">
+        <button data-mode="customer" class="on">Customer</button>
+        <button data-mode="notary">Notary</button>
+      </div>
+    </div>
+    <div class="form-shell">
+      <div class="page-title">Email signature generator</div>
+      <div class="page-subtitle">Build a polished email signature with your notary details and NotaryFinder branding.</div>
+      <div class="esig-grid">
+        <div class="esig-form">
+          <div class="field"><label>Name</label><input id="esig-name" type="text" oninput="renderEsig()" placeholder="Margaret Chen" /></div>
+          <div class="field"><label>Business</label><input id="esig-biz" type="text" oninput="renderEsig()" placeholder="Chen Mobile Notary" /></div>
+          <div class="field"><label>Phone</label><input id="esig-phone" type="text" oninput="renderEsig()" placeholder="(408) 555-0182" /></div>
+          <div class="field"><label>Commission #</label><input id="esig-commission" type="text" oninput="renderEsig()" placeholder="2398471" /></div>
+          <div class="field"><label>Commission expires</label><input id="esig-exp" type="date" oninput="renderEsig()" /></div>
+        </div>
+        <div class="esig-side">
+          <div class="esig-preview-label">Live preview</div>
+          <div class="esig-preview" id="esig-preview"></div>
+          <button class="btn btn-primary btn-sm" style="width:100%;margin-top:12px;" onclick="copyEsig()">Copy HTML</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ============================================================
@@ -5501,6 +5539,44 @@ async function renderCertificate(jobId) {
         This document records that a notarization took place; it is not the notarized document itself.
       </div>
     </div>`;
+}
+
+/* ---- Feature 60: Email signature generator ---- */
+registerRoute(/^#\/tools\/email-signature$/, () => { goTo('tools-email-signature'); renderEsig(); });
+
+function esigHtml() {
+  const v = id => escapeHTML((document.getElementById(id)?.value || '').trim());
+  const name = v('esig-name') || 'Your Name';
+  const biz = v('esig-biz');
+  const phone = v('esig-phone');
+  const comm = v('esig-commission');
+  const expRaw = document.getElementById('esig-exp')?.value || '';
+  const exp = expRaw ? new Date(expRaw).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+  return `<table cellpadding="0" cellspacing="0" style="font-family:Arial,Helvetica,sans-serif;color:#222;font-size:13px;line-height:1.5;">
+  <tr><td style="padding-right:14px;border-right:3px solid #111;">
+    <div style="font-size:15px;font-weight:bold;">${name}</div>
+    ${biz ? `<div style="color:#555;">${biz}</div>` : ''}
+    <div style="font-size:11px;color:#888;margin-top:4px;">Commissioned Notary Public</div>
+  </td><td style="padding-left:14px;font-size:12px;color:#555;">
+    ${phone ? `<div>📞 ${phone}</div>` : ''}
+    ${comm ? `<div>Commission #${comm}</div>` : ''}
+    ${exp ? `<div>Expires ${exp}</div>` : ''}
+    <div style="margin-top:6px;font-size:11px;color:#999;">Verified on <a href="https://notaryfinder.com" style="color:#111;text-decoration:none;font-weight:bold;">NotaryFinder</a></div>
+  </td></tr>
+</table>`;
+}
+
+function renderEsig() {
+  const el = document.getElementById('esig-preview');
+  if (el) el.innerHTML = esigHtml();
+}
+
+function copyEsig() {
+  const html = esigHtml();
+  navigator.clipboard?.writeText(html).then(
+    () => toast('Signature HTML copied'),
+    () => toast('Copy failed — select and copy manually')
+  );
 }
 
 /* ---- Feature 56: What's new changelog ---- */
