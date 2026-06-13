@@ -1784,6 +1784,7 @@
           </div>
           <div class="field" style="margin-bottom:0;">
             <label class="field-label" for="bm-message">Message (optional)</label>
+            <select id="bm-template" class="field-input" style="margin-bottom:6px;" onchange="applyBidTemplate()"></select>
             <textarea id="bm-message" class="field-textarea" placeholder="Tell the customer why they should choose you…"></textarea>
           </div>
         </form>
@@ -2125,6 +2126,8 @@ const DEFAULT_STATE = {
   notaryUser: { id: 'n1' },                        // active notary identity for demo
   jobs: [],                                        // populated below
   bids: [],                                        // populated below
+  bidTemplates: [],                                // notary saved bid message templates
+  pinnedJobIds: [],                                // notary's pinned job ids
   notaries: [
     { id: 'n1', name: 'Margaret Chen',  initials: 'MC', rating: 4.9, reviews: 312, distance: '0.8 mi', phone: '(408) 555-0182' },
     { id: 'n2', name: 'James Alvarez',  initials: 'JA', rating: 4.7, reviews: 187, distance: '1.4 mi', phone: '(408) 555-0347' },
@@ -3222,8 +3225,29 @@ function openBidModal(jobId) {
   $bmPriceErr.style.display = 'none';
   $bmPrice.closest('.field').classList.remove('has-error');
 
+  // Populate the "Use template" dropdown from saved templates.
+  const tplSel = document.getElementById('bm-template');
+  if (tplSel) {
+    const tpls = (STATE.bidTemplates || []).filter(t => t.message);
+    if (tpls.length === 0) {
+      tplSel.style.display = 'none';
+    } else {
+      tplSel.style.display = 'block';
+      tplSel.innerHTML = `<option value="">Use a template…</option>` +
+        tpls.map((t, i) => `<option value="${i}">${escapeHTML(t.label || 'Template ' + (i + 1))}</option>`).join('');
+    }
+  }
+
   $bidOverlay.classList.add('open');
   setTimeout(() => $bmPrice.focus(), 200);
+}
+
+function applyBidTemplate() {
+  const sel = document.getElementById('bm-template');
+  if (!sel || sel.value === '') return;
+  const tpls = (STATE.bidTemplates || []).filter(t => t.message);
+  const t = tpls[+sel.value];
+  if (t) $bmMessage.value = t.message;
 }
 
 function closeBidModal() {
@@ -3554,7 +3578,7 @@ async function submitNotaryLogin() {
   // Best-effort fetch of notary's current rating for dashboard display
   if (sb && sbUser) {
     sb.from('profiles')
-      .select('rating, reviews_count, home_address, home_lat, home_lng, max_travel_mi')
+      .select('rating, reviews_count, home_address, home_lat, home_lng, max_travel_mi, ooo_until, specializations, buffer_minutes')
       .eq('id', sbUser.id).maybeSingle()
       .then(({ data }) => {
         if (data && notarySession) {
@@ -3564,9 +3588,19 @@ async function submitNotaryLogin() {
           notarySession.homeLat         = data.home_lat       ?? notarySession.homeLat     ?? null;
           notarySession.homeLng         = data.home_lng       ?? notarySession.homeLng     ?? null;
           notarySession.maxTravelMi     = data.max_travel_mi  ?? notarySession.maxTravelMi ?? 25;
+          notarySession.oooUntil        = data.ooo_until      ?? null;
+          notarySession.specializations = Array.isArray(data.specializations) ? data.specializations : [];
+          notarySession.bufferMinutes   = data.buffer_minutes ?? 15;
           if (document.getElementById('notary-dashboard').classList.contains('active')) renderDashboard();
         }
       }).catch(() => {});
+    sb.from('notary_bid_templates').select('id,label,message').eq('notary_id', sbUser.id)
+      .then(({ data }) => {
+        if (Array.isArray(data) && data.length) {
+          STATE.bidTemplates = data.map(r => ({ id: r.id, label: r.label, message: r.message || '' }));
+          saveState();
+        }
+      }, () => {});
   }
 
   setLoading(btn, false);
@@ -3605,6 +3639,110 @@ function signOutNotary() {
 }
 
 /* ================================================================
+   NOTARY profile feature helpers — specializations, out-of-office,
+   booking buffer, and bid templates. Stored on notarySession +
+   STATE and mirrored to Supabase where configured.
+   ================================================================ */
+const SPECIALIZATIONS = [
+  'Loan Signing Pro', 'Apostille Specialist', 'RON Certified',
+  'Spanish Speaker', 'Mobile Ready', 'Real Estate Expert'
+];
+
+function oooActive() {
+  const u = notarySession?.oooUntil;
+  if (!u) return false;
+  const d = new Date(u + 'T23:59:59');
+  return !isNaN(d.getTime()) && d.getTime() >= Date.now();
+}
+function oooBlocked() {
+  if (oooActive()) { toast("You're out of office until " + notarySession.oooUntil); return true; }
+  return false;
+}
+function returnFromOoo() {
+  if (notarySession) notarySession.oooUntil = null;
+  if (sb && sbUser) sb.from('profiles').update({ ooo_until: null }).eq('id', sbUser.id).then(() => {}, () => {});
+  toast('Welcome back — you\'re available again');
+  renderDashboard();
+}
+
+function bufferMinutes() {
+  return notarySession?.bufferMinutes ?? 15;
+}
+/* True if the job's time is within buffer_minutes of another job this notary already won. */
+function bufferConflict(job) {
+  if (!job.dateTime) return false;
+  const myId = sbUser?.id || STATE.notaryUser.id;
+  const t = new Date(job.dateTime).getTime();
+  if (isNaN(t)) return false;
+  const bufMs = bufferMinutes() * 60000;
+  return STATE.bids.some(b => {
+    if (b.notaryId !== myId || b.status !== 'accepted') return false;
+    const oj = STATE.jobs.find(j => j.id === b.jobId);
+    if (!oj || oj.id === job.id || !oj.dateTime) return false;
+    if (oj.status === 'cancelled' || oj.status === 'completed') return false;
+    const ot = new Date(oj.dateTime).getTime();
+    return !isNaN(ot) && Math.abs(ot - t) < bufMs;
+  });
+}
+
+/* ----- Bid templates ----- */
+function renderBidTemplates() {
+  const el = document.getElementById('ns-bid-templates');
+  if (!el) return;
+  const tpls = STATE.bidTemplates || [];
+  if (tpls.length === 0) {
+    el.innerHTML = `<div style="font-size:9px;color:#bbb;padding:2px 0;">No templates yet. Add one to reuse common bid messages.</div>`;
+    return;
+  }
+  el.innerHTML = tpls.map(t => `
+    <div class="bid-template-row" data-tpl-id="${t.id}" style="border:1px solid #ebebeb;border-radius:7px;padding:8px;margin-bottom:6px;">
+      <input type="text" class="field-input bt-label" placeholder="Label (e.g. Loan signing)" value="${escapeHTML(t.label || '')}" style="margin-bottom:5px;font-size:10px;">
+      <textarea class="field-textarea bt-message" placeholder="Message" style="min-height:48px;font-size:10px;">${escapeHTML(t.message || '')}</textarea>
+      <div style="margin-top:5px;"><button class="btn btn-ghost btn-sm" style="font-size:9px;padding:2px 8px;color:var(--accent-red);" onclick="deleteBidTemplate('${t.id}')">Delete</button></div>
+    </div>
+  `).join('');
+}
+function addBidTemplate() {
+  STATE.bidTemplates = STATE.bidTemplates || [];
+  STATE.bidTemplates.push({ id: uid('bt'), label: '', message: '' });
+  saveState();
+  renderBidTemplates();
+}
+function deleteBidTemplate(id) {
+  STATE.bidTemplates = (STATE.bidTemplates || []).filter(t => t.id !== id);
+  saveState();
+  if (sb && sbUser && !id.startsWith('bt-')) {
+    sb.from('notary_bid_templates').delete().eq('id', id).then(() => {}, () => {});
+  }
+  renderBidTemplates();
+}
+/* Read template edits out of the DOM and persist them. */
+function persistBidTemplates() {
+  const rows = document.querySelectorAll('#ns-bid-templates .bid-template-row');
+  const out = [];
+  rows.forEach(row => {
+    out.push({
+      id: row.dataset.tplId,
+      label: row.querySelector('.bt-label').value.trim(),
+      message: row.querySelector('.bt-message').value.trim()
+    });
+  });
+  STATE.bidTemplates = out;
+  saveState();
+  if (sb && sbUser) {
+    out.forEach(t => {
+      const payload = { notary_id: sbUser.id, label: t.label || 'Template', message: t.message || null };
+      if (t.id.startsWith('bt-')) {
+        sb.from('notary_bid_templates').insert(payload).select().single()
+          .then(({ data }) => { if (data) { t.id = data.id; saveState(); } }, () => {});
+      } else {
+        sb.from('notary_bid_templates').update(payload).eq('id', t.id).then(() => {}, () => {});
+      }
+    });
+  }
+}
+
+/* ================================================================
    NOTARY SETTINGS — collapsible home address + max travel panel
    ================================================================ */
 let notarySettingsPanelOpen = false;
@@ -3637,6 +3775,40 @@ function toggleNotarySettings() {
         <button class="btn btn-primary btn-sm" onclick="saveNotarySettings()">Save</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleNotarySettings()">Cancel</button>
       </div>
+
+      <div style="border-top:1px solid #ebebeb;margin:16px 0 12px;"></div>
+      <div style="font-size:11px;font-weight:600;color:#000;letter-spacing:-.2px;margin-bottom:6px;">Out of office</div>
+      <label class="terms-cb-label" style="align-items:center;margin-bottom:8px;">
+        <input type="checkbox" id="ns-ooo-toggle" ${oooActive() ? 'checked' : ''} onchange="document.getElementById('ns-ooo-row').style.display=this.checked?'block':'none'">
+        <span style="font-size:9.5px;color:#777;">Hide jobs and pause bidding while I'm away.</span>
+      </label>
+      <div id="ns-ooo-row" style="display:${oooActive() ? 'block' : 'none'};margin-bottom:6px;">
+        <label class="field-label" for="ns-ooo-until" style="font-size:9px;">Until</label>
+        <input type="date" id="ns-ooo-until" class="field-input" style="max-width:160px;" value="${notarySession?.oooUntil || ''}">
+      </div>
+
+      <div style="border-top:1px solid #ebebeb;margin:16px 0 12px;"></div>
+      <div style="font-size:11px;font-weight:600;color:#000;letter-spacing:-.2px;margin-bottom:6px;">Specializations</div>
+      <div id="ns-specializations" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+        ${SPECIALIZATIONS.map(s => {
+          const on = (notarySession?.specializations || []).includes(s);
+          return `<button type="button" class="svc-pill${on ? ' on' : ''}" data-spec="${escapeHTML(s)}" onclick="this.classList.toggle('on')">${escapeHTML(s)}</button>`;
+        }).join('')}
+      </div>
+
+      <div style="border-top:1px solid #ebebeb;margin:16px 0 12px;"></div>
+      <div style="font-size:11px;font-weight:600;color:#000;letter-spacing:-.2px;margin-bottom:6px;">Booking buffer</div>
+      <div class="field" style="margin-bottom:6px;">
+        <label class="field-label" for="ns-buffer" style="font-size:9px;">Block bids within <span class="field-label-meta">(minutes)</span> of another accepted job</label>
+        <input type="number" id="ns-buffer" class="field-input" style="max-width:120px;" min="0" max="240" value="${bufferMinutes()}">
+      </div>
+
+      <div style="border-top:1px solid #ebebeb;margin:16px 0 12px;"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:600;color:#000;letter-spacing:-.2px;">Bid templates</div>
+        <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:2px 8px;" onclick="addBidTemplate()">+ New</button>
+      </div>
+      <div id="ns-bid-templates"></div>
     </div>
   `;
   nsLocation.lat = notarySession?.homeLat ?? null;
@@ -3658,6 +3830,7 @@ function toggleNotarySettings() {
         nsGeoTimer = setTimeout(() => geocodeNsAddress(addrEl.value), 600);
       });
     }
+    renderBidTemplates();
   }, 80);
 }
 
@@ -3688,19 +3861,36 @@ async function saveNotarySettings() {
   if (!addrEl || !maxEl) return;
   const addr  = addrEl.value.trim();
   const maxMi = Math.max(1, parseInt(maxEl.value) || 25);
+
+  // Out of office
+  const oooToggle = document.getElementById('ns-ooo-toggle');
+  const oooUntilEl = document.getElementById('ns-ooo-until');
+  const oooUntil = (oooToggle?.checked && oooUntilEl?.value) ? oooUntilEl.value : null;
+  // Specializations
+  const specs = Array.from(document.querySelectorAll('#ns-specializations .svc-pill.on')).map(b => b.dataset.spec);
+  // Buffer
+  const buffer = Math.max(0, parseInt(document.getElementById('ns-buffer')?.value) || 0);
+
   if (notarySession) {
     notarySession.homeAddress = addr;
     notarySession.homeLat     = nsLocation.lat;
     notarySession.homeLng     = nsLocation.lng;
     notarySession.maxTravelMi = maxMi;
+    notarySession.oooUntil    = oooUntil;
+    notarySession.specializations = specs;
+    notarySession.bufferMinutes   = buffer;
   }
+  persistBidTemplates();
   if (sb && sbUser) {
     try {
       const { error } = await sb.from('profiles').update({
         home_address:  addr || null,
         home_lat:      nsLocation.lat,
         home_lng:      nsLocation.lng,
-        max_travel_mi: maxMi
+        max_travel_mi: maxMi,
+        ooo_until:     oooUntil,
+        specializations: specs,
+        buffer_minutes:  buffer
       }).eq('id', sbUser.id);
       if (error) throw error;
     } catch (e) {
