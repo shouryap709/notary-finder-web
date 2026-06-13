@@ -1433,6 +1433,10 @@
               <div class="field-error">Enter a starting price greater than $0.</div>
               <div class="price-help">Notaries can bid lower — you'll see all bids before you pick one.</div>
             </div>
+            <label class="terms-cb-label" style="margin-top:12px;align-items:center;">
+              <input type="checkbox" id="jf-instant-book" style="flex-shrink:0;">
+              <span style="font-size:9.5px;color:#777;line-height:1.5;">Allow instant booking at the <strong id="jf-instant-price">suggested</strong> price — a notary can claim the job immediately, skipping bidding.</span>
+            </label>
           </div>
 
           <div class="step-foot">
@@ -2521,6 +2525,8 @@ function updateSuggested() {
   const services = [...selectedServices];
   const suggested = calculateSuggestedPrice(services, $signatures.value, currentPref);
   $suggested.innerHTML = `$${suggested}<span>based on your job</span>`;
+  const instPrice = document.getElementById('jf-instant-price');
+  if (instPrice) instPrice.textContent = '$' + suggested;
   // Default the user's price to the suggestion until they edit it.
   if (!userTouchedPrice) $price.value = suggested;
 }
@@ -2620,6 +2626,7 @@ $jobForm.addEventListener('submit', async e => {
     suggestedPrice: calculateSuggestedPrice(services, $signatures.value, currentPref),
     recurrence: document.getElementById('jf-recurrence')?.value || 'none',
     recurrenceParentId: null,
+    allowInstantBook: !!document.getElementById('jf-instant-book')?.checked,
     status: 'open',
     acceptedBidId: null,
     postedAt: Date.now(),
@@ -3118,6 +3125,9 @@ function renderDashboard() {
             ${alreadyBid && job.documentFilePath
               ? `<button class="btn btn-ghost btn-sm" onclick="openSignedUrl('job-documents','${job.documentFilePath}')">View doc</button>`
               : ''}
+            ${job.allowInstantBook && !alreadyBid
+              ? `<button class="btn btn-secondary btn-sm" onclick="instantBook('${job.id}')">Book now $${job.suggestedPrice}</button>`
+              : ''}
             <button class="btn btn-primary btn-sm" onclick="openBidModal('${job.id}')">${alreadyBid ? 'Update Bid' : 'Place Bid'}</button>
           </div>
         </div>
@@ -3299,6 +3309,41 @@ $bmSubmit.addEventListener('click', async () => {
   toast(existing ? 'Bid updated' : 'Bid placed');
   renderDashboard();
 });
+
+/* Instant book — create a bid at the suggested price and accept it in one go. */
+async function instantBook(jobId) {
+  const job = STATE.jobs.find(j => j.id === jobId);
+  if (!job || job.status !== 'open' || !job.allowInstantBook) return;
+  if (typeof oooBlocked === 'function' && oooBlocked()) return;
+  if (typeof bufferConflict === 'function' && bufferConflict(job)) { toast('You have another job within ' + bufferMinutes() + ' min of this time.'); return; }
+
+  const me = notarySession
+    ? { id: sbUser?.id || STATE.notaryUser.id, name: notarySession.name, rating: 5.0, reviews: 0, distance: '—' }
+    : STATE.notaries.find(n => n.id === STATE.notaryUser.id);
+  if (!me) return;
+
+  const price = job.suggestedPrice || job.startingPrice;
+  const bid = {
+    id: uid('b'), jobId: job.id, notaryId: me.id,
+    notaryName: me.name, notaryRating: me.rating, notaryReviews: me.reviews,
+    distance: me.distance, price, message: 'Instant booked at the suggested price.',
+    status: 'accepted', placedAt: Date.now()
+  };
+  STATE.bids.push(bid);
+  job.status = 'accepted';
+  job.acceptedBidId = bid.id;
+  STATE.bids.forEach(b => { if (b.jobId === job.id && b.id !== bid.id) b.status = 'lost'; });
+  saveState();
+
+  try {
+    await sbSaveBid(bid);
+    await sbAcceptBid(job.id, bid.id);
+  } catch (err) {
+    console.warn('[Supabase] instant book:', err);
+  }
+  toast('Job booked — you\'re confirmed');
+  renderDashboard();
+}
 
 /* ================================================================
    MY BIDS — tabs: Active / Won / Lost
@@ -3923,7 +3968,8 @@ function jobToRow(job) {
     status:           job.status,
     accepted_bid_id:  job.acceptedBidId || null,
     recurrence:       job.recurrence || 'none',
-    recurrence_parent_id: job.recurrenceParentId || null
+    recurrence_parent_id: job.recurrenceParentId || null,
+    allow_instant_book: !!job.allowInstantBook
   };
 }
 
@@ -3948,6 +3994,7 @@ function rowToJob(row) {
     acceptedBidId:         row.accepted_bid_id || null,
     recurrence:            row.recurrence || 'none',
     recurrenceParentId:    row.recurrence_parent_id || null,
+    allowInstantBook:      !!row.allow_instant_book,
     documentFilePath:      row.document_file_path || null,
     signedDocumentFilePath: row.signed_document_file_path || null,
     customerId:            row.customer_id || null,
