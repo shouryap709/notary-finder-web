@@ -1288,6 +1288,31 @@
     border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 11px; color: #1f6e36;
   }
   .invite-banner button { margin-left: auto; border: none; background: none; color: #1f8a3b; cursor: pointer; font-size: 14px; }
+
+  /* ---- Job completion certificate ---- */
+  .cert-toolbar { display: flex; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #eee; }
+  .cert-sheet { max-width: 640px; margin: 0 auto; padding: 40px 44px; }
+  .cert-doc { border: 2px solid #111; border-radius: 6px; padding: 38px 40px; }
+  .cert-logo { font-size: 20px; font-weight: 700; letter-spacing: -.5px; text-align: center; }
+  .cert-logo em { font-style: normal; color: #888; }
+  .cert-kicker { text-align: center; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #999; margin: 14px 0 26px; }
+  .cert-title { text-align: center; font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .cert-sub { text-align: center; font-size: 11px; color: #777; margin-bottom: 28px; }
+  .cert-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; margin-bottom: 26px; }
+  .cert-cell .lbl { font-size: 8.5px; text-transform: uppercase; letter-spacing: .6px; color: #aaa; font-weight: 600; margin-bottom: 3px; }
+  .cert-cell .val { font-size: 12px; color: #111; }
+  .cert-foot { border-top: 1px solid #ddd; padding-top: 16px; font-size: 9.5px; color: #999; text-align: center; line-height: 1.6; }
+
+  @media print {
+    body { background: #fff !important; }
+    .scene, .laptop-lid, .laptop-base, .screen { all: unset !important; display: block !important; }
+    body * { visibility: hidden; }
+    #certificate, #certificate * { visibility: visible; }
+    #certificate { position: absolute; inset: 0; }
+    .no-print { display: none !important; }
+    .cert-sheet { max-width: none; padding: 0; }
+    .rt-dot, #rt-dot, .cookie-banner, .notif-bell { display: none !important; }
+  }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1980,6 +2005,17 @@
       <div id="dir-list" class="dir-list"></div>
       <div id="dir-pager" class="dir-pager"></div>
     </div>
+  </div>
+
+  <!-- ============================================================
+       PAGE: JOB COMPLETION CERTIFICATE  (#/job/:id/certificate)
+       ============================================================ -->
+  <div class="page" id="certificate">
+    <div class="cert-toolbar no-print">
+      <button class="btn btn-secondary btn-sm" onclick="goTo('home')">&larr; Back</button>
+      <button class="btn btn-primary btn-sm" onclick="window.print()">Print / Save as PDF</button>
+    </div>
+    <div id="cert-body" class="cert-sheet"></div>
   </div>
 
   <!-- ============================================================
@@ -3077,6 +3113,9 @@ function renderConfirmedCard(bid, job) {
           : ''}
         <button class="btn btn-primary btn-sm" onclick="toast('Calling ${bid.notaryName}…')">Call notary</button>
         <button class="btn btn-secondary btn-sm" onclick="toast('Message sent')">Message</button>
+        ${job.status === 'completed'
+          ? `<button class="btn btn-ghost btn-sm" onclick="openCertificate('${job.id}')">Download certificate</button>`
+          : ''}
         ${job.signedDocumentFilePath
           ? `<button class="btn btn-ghost btn-sm" onclick="openSignedUrl('job-documents','${job.signedDocumentFilePath}')">Download signed doc</button>`
           : ''}
@@ -3547,6 +3586,11 @@ function renderMyBidsList() {
         ${b.status === 'pending' && job && job.status === 'open'
           ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);">
                <button class="btn btn-ghost btn-sm" onclick="cancelBid('${b.id}')">Withdraw bid</button>
+             </div>`
+          : ''}
+        ${b.status === 'accepted' && job && job.status === 'completed'
+          ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);">
+               <button class="btn btn-ghost btn-sm" onclick="openCertificate('${job.id}')">Download certificate</button>
              </div>`
           : ''}
       </div>
@@ -5298,6 +5342,60 @@ function renderInviteBanner() {
   el.innerHTML = `<span>Inviting <strong>${escapeHTML(invitedNotary.name)}</strong> to bid on this job.</span>` +
     `<button title="Remove invite" onclick="clearInvitedNotary()">&#x2715;</button>`;
   el.style.display = 'flex';
+}
+
+/* ---- Feature 55: Job completion certificate ---- */
+registerRoute(/^#\/job\/([^/]+)\/certificate$/, (m) => renderCertificate(m[1]));
+
+function openCertificate(jobId) {
+  // Open the print-friendly certificate in a new tab.
+  window.open(location.pathname + location.search + '#/job/' + jobId + '/certificate', '_blank', 'noopener');
+}
+
+async function renderCertificate(jobId) {
+  goTo('certificate');
+  const el = document.getElementById('cert-body');
+  if (!el) return;
+  const job = STATE.jobs.find(j => j.id === jobId);
+  const bid = job ? STATE.bids.find(b => b.id === job.acceptedBidId) : null;
+
+  if (!job) { el.innerHTML = `<div class="cert-doc"><p style="text-align:center;color:#999;">Certificate not found.</p></div>`; return; }
+
+  // Best-effort commission number from the notary profile.
+  let commission = '—';
+  if (sb && bid?.notaryId) {
+    try {
+      const { data } = await sb.from('profiles').select('license_number').eq('id', bid.notaryId).maybeSingle();
+      if (data?.license_number) commission = data.license_number;
+    } catch (e) {}
+  }
+
+  const customerName = job.customerName || STATE.currentUser.name || 'Customer';
+  const notaryName = bid?.notaryName || '—';
+  const when = formatDateTime(job.dateTime);
+
+  el.innerHTML = `
+    <div class="cert-doc">
+      <div class="cert-logo">Notary<em>Finder</em></div>
+      <div class="cert-kicker">Certificate of Completion</div>
+      <div class="cert-title">Notarial Act Completed</div>
+      <div class="cert-sub">This certifies that the notarial service below was completed through NotaryFinder.</div>
+      <div class="cert-grid">
+        <div class="cert-cell"><div class="lbl">Service</div><div class="val">${escapeHTML(jobServiceLabel(job))}</div></div>
+        <div class="cert-cell"><div class="lbl">Date &amp; time</div><div class="val">${escapeHTML(when)}</div></div>
+        <div class="cert-cell"><div class="lbl">Location</div><div class="val">${escapeHTML(job.location || '—')}</div></div>
+        <div class="cert-cell"><div class="lbl">Signers</div><div class="val">${job.signatures || 1}</div></div>
+        <div class="cert-cell"><div class="lbl">Customer</div><div class="val">${escapeHTML(customerName)}</div></div>
+        <div class="cert-cell"><div class="lbl">Notary</div><div class="val">${escapeHTML(notaryName)}</div></div>
+        <div class="cert-cell"><div class="lbl">Commission #</div><div class="val">${escapeHTML(commission)}</div></div>
+        <div class="cert-cell"><div class="lbl">Certificate ID</div><div class="val">${escapeHTML(job.id)}</div></div>
+      </div>
+      <div class="cert-foot">
+        Issued ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} ·
+        NotaryFinder is a marketplace connecting customers with independent commissioned notaries.<br>
+        This document records that a notarization took place; it is not the notarized document itself.
+      </div>
+    </div>`;
 }
 
 /* ================================================================
