@@ -1426,6 +1426,9 @@
               <span class="price-suggested-label">Suggested price</span>
               <div class="price-suggested-val" id="jf-suggested">$15<span>based on your job</span></div>
             </div>
+            <div id="jf-price-breakdown" style="margin:8px 0 12px;padding-top:8px;border-top:1px dashed #e6e6e6;font-size:9.5px;color:#888;line-height:1.7;">
+              <!-- live breakdown rendered by updateSuggested() -->
+            </div>
             <div class="field" style="margin-bottom:0;">
               <label class="field-label" for="jf-price">Your starting price</label>
               <div class="price-input-wrap">
@@ -2343,14 +2346,21 @@ const SERVICE_ADDONS = {
   'Loan Signing': 50,
   'Real Estate': 40
 };
-function calculateSuggestedPrice(services, signatures, notaryPreference) {
-  let price = 15;
-  price += (Number(signatures) || 0) * 5;
-  if (notaryPreference === 'Mobile') price += 25;
-  // Accept either a string or an array for backwards compat.
+function calculateSuggestedPrice(services, signatures, notaryPreference, numSigners) {
+  return priceBreakdown(services, signatures, notaryPreference, numSigners).total;
+}
+
+/* Itemised suggested-price breakdown for the live calculator panel. */
+function priceBreakdown(services, signatures, notaryPreference, numSigners) {
+  const base = 15;
+  const sigFee = (Number(signatures) || 0) * 5;
+  const mobileFee = notaryPreference === 'Mobile' ? 25 : 0;
   const list = Array.isArray(services) ? services : (services ? [services] : []);
-  list.forEach(s => { price += SERVICE_ADDONS[s] || 0; });
-  return price;
+  const serviceFee = list.reduce((sum, s) => sum + (SERVICE_ADDONS[s] || 0), 0);
+  const signers = Math.max(1, Number(numSigners) || 1);
+  const signerFee = (signers - 1) * 5;   // +$5 per extra signer (feature: multi-signature)
+  const total = base + sigFee + mobileFee + serviceFee + signerFee;
+  return { base, sigFee, mobileFee, serviceFee, signerFee, total };
 }
 
 /* ----- Service helpers — every job stores `services` as an array.
@@ -2591,12 +2601,51 @@ $price.addEventListener('input', () => { userTouchedPrice = true; });
 
 function updateSuggested() {
   const services = [...selectedServices];
-  const suggested = calculateSuggestedPrice(services, $signatures.value, currentPref);
-  $suggested.innerHTML = `$${suggested}<span>based on your job</span>`;
+  const signers = +(document.getElementById('jf-num-signers')?.value) || 1;
+  const bd = priceBreakdown(services, $signatures.value, currentPref, signers);
+  const suggested = bd.total;
+
+  // Animate the number from its previous value (250ms ease-out).
+  const prev = Number($suggested.dataset.val) || 15;
+  animatePrice($suggested, prev, suggested);
+  $suggested.dataset.val = suggested;
+
   const instPrice = document.getElementById('jf-instant-price');
   if (instPrice) instPrice.textContent = '$' + suggested;
+
+  // Live breakdown panel.
+  const bdEl = document.getElementById('jf-price-breakdown');
+  if (bdEl) {
+    const rows = [
+      ['Base fee', bd.base],
+      [`Signatures (${+$signatures.value || 0} × $5)`, bd.sigFee],
+      ['Mobile fee', bd.mobileFee],
+      ['Service add-ons', bd.serviceFee]
+    ];
+    if (bd.signerFee > 0) rows.push([`Extra signers (${signers - 1} × $5)`, bd.signerFee]);
+    bdEl.innerHTML = rows.map(([lbl, amt]) =>
+      `<div style="display:flex;justify-content:space-between;"><span>${lbl}</span><span>+$${amt}</span></div>`
+    ).join('') +
+    `<div style="display:flex;justify-content:space-between;font-weight:600;color:#000;margin-top:4px;padding-top:4px;border-top:1px solid #eee;"><span>Suggested</span><span>$${bd.total}</span></div>`;
+  }
+
   // Default the user's price to the suggestion until they edit it.
   if (!userTouchedPrice) $price.value = suggested;
+}
+
+/* Tween a "$N" label from one integer to another over ~250ms. */
+function animatePrice(el, from, to) {
+  if (from === to) { el.innerHTML = `$${to}<span>based on your job</span>`; return; }
+  const start = performance.now();
+  const dur = 250;
+  function frame(now) {
+    const t = Math.min(1, (now - start) / dur);
+    const eased = 1 - Math.pow(1 - t, 3);   // ease-out cubic
+    const val = Math.round(from + (to - from) * eased);
+    el.innerHTML = `$${val}<span>based on your job</span>`;
+    if (t < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 }
 
 function resetPostJobForm() {
