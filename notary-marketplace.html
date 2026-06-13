@@ -1425,6 +1425,15 @@
   .calc-total { font-size: 13px; color: #111; padding-top: 12px; border-top: 1px solid #eaeaea; }
   .calc-total strong { font-size: 18px; }
   .calc-foot { font-size: 10px; color: #999; margin-top: 8px; line-height: 1.5; }
+
+  /* ---- Smart time slot chips ---- */
+  .time-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
+  .time-chip {
+    border: 1px solid #e2e2e2; background: #fff; color: #555; font-size: 10px; font-weight: 500;
+    padding: 6px 11px; border-radius: 20px; cursor: pointer; transition: all .14s;
+  }
+  .time-chip:hover { border-color: #000; color: #000; }
+  .time-chip.on { background: #000; color: #fff; border-color: #000; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1697,6 +1706,7 @@
 
           <div class="field">
             <label class="field-label" for="jf-datetime">Preferred date & time</label>
+            <div class="time-chips" id="jf-time-chips"></div>
             <input type="datetime-local" id="jf-datetime" class="field-input" required>
             <div class="field-error">Pick a date and time.</div>
           </div>
@@ -2825,7 +2835,7 @@ function goTo(pageId) {
   if (pageId === 'my-job') renderMyJob();
   if (pageId === 'notary-dashboard') { renderDashboard(); renderNotaryHeaderPill(); }
   if (pageId === 'my-bids') { renderMyBids(); renderNotaryHeaderPill(); }
-  if (pageId === 'post-job') { resetPostJobForm(); renderInviteBanner(); }
+  if (pageId === 'post-job') { resetPostJobForm(); renderInviteBanner(); renderTimeChips(); }
 
   // Realtime lifecycle — subscribe for live updates.
   if (sb) {
@@ -5738,6 +5748,49 @@ async function renderCertificate(jobId) {
         This document records that a notarization took place; it is not the notarized document itself.
       </div>
     </div>`;
+}
+
+/* ---- Feature 64: Smart suggested time slots ---- */
+function localDateTimeValue(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function atTime(base, hour, min = 0) {
+  const d = new Date(base);
+  d.setHours(hour, min, 0, 0);
+  return d;
+}
+function nextWeekday(base, targetDow, allowToday) {
+  const d = new Date(base);
+  let add = (targetDow - d.getDay() + 7) % 7;
+  if (add === 0 && !allowToday) add = 7;
+  d.setDate(d.getDate() + add);
+  return d;
+}
+function buildTimeSlots() {
+  const now = new Date();
+  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+  // "Next Tuesday" = a Tuesday at least 2 days out so it never collides with today/tomorrow chips
+  const nextTue = nextWeekday(new Date(now.getTime() + 2 * 86400000), 2, true);
+  return [
+    { label: 'Today 2 PM',        dt: atTime(now, 14) },
+    { label: 'Today 4 PM',        dt: atTime(now, 16) },
+    { label: 'Tomorrow 10 AM',    dt: atTime(tomorrow, 10) },
+    { label: 'Tomorrow 2 PM',     dt: atTime(tomorrow, 14) },
+    { label: 'This Saturday 11 AM', dt: atTime(nextWeekday(now, 6, true), 11) },
+    { label: 'Next Tuesday 9 AM', dt: atTime(nextTue, 9) }
+  ];
+}
+function renderTimeChips() {
+  const wrap = document.getElementById('jf-time-chips');
+  if (!wrap) return;
+  wrap.innerHTML = buildTimeSlots().map(s =>
+    `<button type="button" class="time-chip" data-dt="${localDateTimeValue(s.dt)}" onclick="pickTimeSlot(this)">${s.label}</button>`
+  ).join('');
+}
+function pickTimeSlot(btn) {
+  $datetime.value = btn.dataset.dt;
+  document.querySelectorAll('#jf-time-chips .time-chip').forEach(c => c.classList.toggle('on', c === btn));
 }
 
 /* ---- Feature 63: Pricing transparency page ---- */
