@@ -30,6 +30,8 @@ export type NotaryProfile = {
   reviews_count?: number;
   verification_status?: string | null;
   services?: string[] | null;
+  home_lat?: number | null;
+  home_lng?: number | null;
 };
 
 export type Job = {
@@ -94,10 +96,34 @@ export async function fetchMyProfile(): Promise<NotaryProfile | null> {
   if (!session) return null;
   const { data } = await supabase
     .from('profiles')
-    .select('id,full_name,business_name,email,phone,license_number,rating,reviews_count,verification_status,services')
+    .select('id,full_name,business_name,email,phone,license_number,rating,reviews_count,verification_status,services,home_lat,home_lng')
     .eq('id', session.user.id)
     .maybeSingle();
   return data ?? null;
+}
+
+/** Fetch a single job by id. */
+export async function fetchJob(id: string): Promise<Job | null> {
+  const { data } = await supabase
+    .from('jobs')
+    .select('id,service_type,services,signatures,notary_preference,location_address,location_lat,location_lng,date_time,notes,starting_price,suggested_price,status')
+    .eq('id', id)
+    .maybeSingle();
+  return data ?? null;
+}
+
+/** Insert a bid on a job as the signed-in notary. */
+export async function placeBid(jobId: string, price: number, message: string) {
+  const session = await getSession();
+  if (!session) throw new Error('Not signed in');
+  const { error } = await supabase.from('bids').insert({
+    job_id: jobId,
+    notary_id: session.user.id,
+    price,
+    message: message || null,
+    status: 'pending',
+  });
+  if (error) throw error;
 }
 
 /** Fetch open jobs available to bid on. */

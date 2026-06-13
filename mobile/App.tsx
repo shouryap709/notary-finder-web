@@ -21,7 +21,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 export type RootStackParamList = {
   Auth: undefined;
   ServicesChecklist: undefined;
-  Dashboard: undefined;
+  Dashboard: { flash?: string } | undefined;
   JobDetail: { jobId: string };
   BidPlacement: { jobId: string };
   Profile: undefined;

@@ -4,20 +4,35 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import JobCard from '../components/JobCard';
+import Toast from '../components/Toast';
 import { theme } from '../theme';
-import { fetchOpenJobs, Job } from '../lib/supabase';
+import { fetchMyProfile, fetchOpenJobs, Job } from '../lib/supabase';
+import { distanceMiles } from '../lib/geo';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
-export default function DashboardScreen({ navigation }: Props) {
+export default function DashboardScreen({ navigation, route }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [home, setHome] = useState<{ lat?: number | null; lng?: number | null }>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Surface a one-shot confirmation passed back from BidPlacement.
+  useEffect(() => {
+    const flash = route.params?.flash;
+    if (flash) {
+      setToast(flash);
+      navigation.setParams({ flash: undefined });
+      load();
+    }
+  }, [route.params?.flash]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = useCallback(async () => {
     try {
-      const data = await fetchOpenJobs();
+      const [data, profile] = await Promise.all([fetchOpenJobs(), fetchMyProfile()]);
       setJobs(data);
+      if (profile) setHome({ lat: profile.home_lat, lng: profile.home_lng });
     } catch (e) {
       // network/offline — keep whatever we have
     } finally {
@@ -57,11 +72,13 @@ export default function DashboardScreen({ navigation }: Props) {
         renderItem={({ item }) => (
           <JobCard
             job={item}
+            distanceMi={distanceMiles(home.lat, home.lng, item.location_lat, item.location_lng)}
             onPress={() => navigation.navigate('JobDetail', { jobId: item.id })}
             onBid={() => navigation.navigate('BidPlacement', { jobId: item.id })}
           />
         )}
       />
+      <Toast message={toast} onHide={() => setToast(null)} />
     </SafeAreaView>
   );
 }
