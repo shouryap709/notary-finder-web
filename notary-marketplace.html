@@ -1328,10 +1328,17 @@
             <div class="field-error">Pick at least one service.</div>
           </div>
 
-          <div class="field">
-            <label class="field-label" for="jf-signatures">Number of signatures</label>
-            <input type="number" id="jf-signatures" class="field-input" min="1" max="20" value="1" required>
-            <div class="field-error">Enter at least 1 signature.</div>
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label" for="jf-signatures">Number of signatures</label>
+              <input type="number" id="jf-signatures" class="field-input" min="1" max="20" value="1" required>
+              <div class="field-error">Enter at least 1 signature.</div>
+            </div>
+            <div class="field">
+              <label class="field-label" for="jf-num-signers">Number of signers</label>
+              <input type="number" id="jf-num-signers" class="field-input" min="1" max="20" value="1">
+              <div class="price-help" style="margin-top:5px;">+$5 per signer beyond the first.</div>
+            </div>
           </div>
 
           <div class="step-foot">
@@ -2607,6 +2614,7 @@ function updateServicesCount() {
 }
 
 $signatures.addEventListener('input', updateSuggested);
+document.getElementById('jf-num-signers')?.addEventListener('input', updateSuggested);
 $price.addEventListener('input', () => { userTouchedPrice = true; });
 
 function updateSuggested() {
@@ -2778,6 +2786,7 @@ $jobForm.addEventListener('submit', async e => {
     services,                             // canonical array
     serviceType: services[0] || '',       // legacy single field for backwards compat
     signatures: +$signatures.value,
+    numSigners: Math.max(1, +document.getElementById('jf-num-signers')?.value || 1),
     notaryPreference: currentPref,
     location: $location.value.trim(),
     locationLat:  jobLocation.lat,        // set by Leaflet geocoder
@@ -2785,7 +2794,7 @@ $jobForm.addEventListener('submit', async e => {
     dateTime: $datetime.value,
     notes: $notes.value.trim(),
     startingPrice: +$price.value,
-    suggestedPrice: calculateSuggestedPrice(services, $signatures.value, currentPref),
+    suggestedPrice: calculateSuggestedPrice(services, $signatures.value, currentPref, Math.max(1, +document.getElementById('jf-num-signers')?.value || 1)),
     recurrence: document.getElementById('jf-recurrence')?.value || 'none',
     recurrenceParentId: null,
     allowInstantBook: !!document.getElementById('jf-instant-book')?.checked,
@@ -3351,6 +3360,7 @@ function renderDashboard() {
             <div class="job-card-tags">
               <span class="job-tag">${job.notaryPreference}</span>
               <span class="job-tag">${formatDateTime(job.dateTime)}</span>
+              ${(job.numSigners || 1) > 1 ? `<span class="job-tag">${job.numSigners} signers</span>` : ''}
               ${isRecurring(job) ? `<span class="job-tag" style="background:#eef6ff;color:#2f6bd0;border-color:#cfe2fb;">↻ Recurring</span>` : ''}
               ${isInvited(job) ? '<span class="job-tag" style="background:#2db075;color:#fff;border-color:#2db075;">★ Direct invitation</span>' : ''}
               ${job.isUserJob ? '<span class="job-tag" style="background:#000;color:#fff;">Your customer</span>' : ''}
@@ -4420,6 +4430,7 @@ function jobToRow(job) {
     suggested_price:  job.suggestedPrice,
     status:           job.status,
     accepted_bid_id:  job.acceptedBidId || null,
+    num_signers:      job.numSigners || 1,
     recurrence:       job.recurrence || 'none',
     recurrence_parent_id: job.recurrenceParentId || null,
     allow_instant_book: !!job.allowInstantBook,
@@ -4438,6 +4449,7 @@ function rowToJob(row) {
     services:         row.services || (row.service_type ? [row.service_type] : []),
     serviceType:      row.service_type || '',
     signatures:       row.signatures || 1,
+    numSigners:       row.num_signers || 1,
     notaryPreference: row.notary_preference || 'Mobile',
     location:         row.location_address || '',
     locationLat:      row.location_lat || null,
