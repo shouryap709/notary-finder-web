@@ -1349,6 +1349,16 @@
   .trust-item strong { color: #777; font-weight: 600; }
   .trust-press { gap: 6px; }
   .trust-press-todo { font-size: 9px; color: #ccc; border: 1px dashed #ddd; border-radius: 5px; padding: 1px 6px; }
+
+  /* ---- Recent searches ---- */
+  .recent-searches { max-width: 380px; margin: 18px auto 0; text-align: center; }
+  .recent-label { font-size: 8.5px; text-transform: uppercase; letter-spacing: .6px; color: #bbb; font-weight: 600; margin-bottom: 8px; }
+  .recent-chips { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
+  .recent-chip {
+    border: 1px solid #e2e2e2; background: #fff; color: #555; font-size: 10.5px; font-weight: 500;
+    padding: 6px 13px; border-radius: 20px; cursor: pointer; transition: border-color .14s, color .14s;
+  }
+  .recent-chip:hover { border-color: #000; color: #000; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1402,6 +1412,11 @@
       </div>
 
       <div class="tier-strip" id="customer-tier-strip" style="display:none"></div>
+
+      <div class="recent-searches" id="recent-searches" style="display:none">
+        <div class="recent-label">Recent searches</div>
+        <div class="recent-chips" id="recent-chips"></div>
+      </div>
 
       <div class="trust-row">
         <div class="trust-item">
@@ -2360,6 +2375,7 @@ const STORAGE_KEY = 'nf_marketplace_state_v1';
 const DEFAULT_STATE = {
   currentMode: 'customer',                         // 'customer' | 'notary'
   currentUser: { name: '', email: '' },            // customer profile (filled on post)
+  recentServices: [],                              // last services the customer posted (max 5)
   notaryUser: { id: 'n1' },                        // active notary identity for demo
   jobs: [],                                        // populated below
   bids: [],                                        // populated below
@@ -2846,7 +2862,8 @@ $jobForm.addEventListener('submit', async e => {
     status: 'open',
     acceptedBidId: null,
     postedAt: Date.now(),
-    isUserJob: true
+    isUserJob: true,
+    invitedNotaryId: invitedNotary?.id || null
   };
 
   // Authenticate the customer when Supabase is configured
@@ -2872,6 +2889,8 @@ $jobForm.addEventListener('submit', async e => {
 
   STATE.jobs.push(job);
   STATE.currentUser = { name: job.customerName, email: job.customerEmail };
+  updateRecentServices(services);
+  clearInvitedNotary();
   saveState();
 
   // Write to Supabase — await when a document needs to be uploaded (requires the real UUID).
@@ -5247,10 +5266,15 @@ async function loadCustomerTier() {
   if (!sb || !sbUser) return;
   try {
     const { data } = await sb.from('profiles')
-      .select('tier, role, full_name').eq('id', sbUser.id).maybeSingle();
+      .select('tier, role, full_name, recent_services').eq('id', sbUser.id).maybeSingle();
     if (!data || data.role !== 'customer') return;
     window.customerTier = data.tier || 'standard';
     renderCustomerTierStrip(data.full_name);
+    if (Array.isArray(data.recent_services) && data.recent_services.length) {
+      STATE.recentServices = data.recent_services.slice(0, 5);
+      saveState();
+      renderRecentSearches();
+    }
   } catch (e) { /* tier is display-only — fail silently */ }
 }
 
@@ -5517,6 +5541,43 @@ function initChangelogDot() {
   }
 }
 
+/* ---- Feature 59: Customer search history ---- */
+function updateRecentServices(services) {
+  if (!services || services.length === 0) return;
+  let list = Array.isArray(STATE.recentServices) ? STATE.recentServices.slice() : [];
+  // newest first, de-duped, capped at 5
+  for (const s of services) list = [s, ...list.filter(x => x !== s)];
+  list = list.slice(0, 5);
+  STATE.recentServices = list;
+  saveState();
+  renderRecentSearches();
+  if (sb && sbUser) {
+    sb.from('profiles').update({ recent_services: list }).eq('id', sbUser.id)
+      .then(() => {}, () => {});
+  }
+}
+
+function renderRecentSearches() {
+  const wrap = document.getElementById('recent-searches');
+  const chips = document.getElementById('recent-chips');
+  if (!wrap || !chips) return;
+  const list = Array.isArray(STATE.recentServices) ? STATE.recentServices : [];
+  if (list.length === 0) { wrap.style.display = 'none'; return; }
+  chips.innerHTML = list.map(s =>
+    `<button class="recent-chip" onclick="rebookService('${s.replace(/'/g, "\\'")}')">${escapeHTML(s)}</button>`).join('');
+  wrap.style.display = 'block';
+}
+
+function rebookService(svc) {
+  goTo('post-job');
+  selectedServices.clear();
+  selectedServices.add(svc);
+  $servicesGrid.querySelectorAll('.svc-pill').forEach(p =>
+    p.classList.toggle('on', p.dataset.svc === svc));
+  updateServicesCount();
+  updateSuggested();
+}
+
 /* ---- Feature 57: Newsletter signup ---- */
 async function submitNewsletter(e) {
   e.preventDefault();
@@ -5583,6 +5644,7 @@ async function submitNewsletter(e) {
   setLegalLinks();
   initCookieConsent();
   initChangelogDot();
+  renderRecentSearches();
   seedIfEmpty();
   renderStepper();
   updateSuggested();
