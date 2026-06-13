@@ -1272,6 +1272,12 @@
     </div>
 
     <div class="home-footer">
+      <a href="#/about" onclick="goTo('about')">About</a>
+      <span class="sep">|</span>
+      <a href="#/careers" onclick="goTo('careers')">Careers</a>
+      <span class="sep">|</span>
+      <a href="#/press" onclick="goTo('press')">Press</a>
+      <span class="sep">|</span>
       <a data-legal="terms" href="#" target="_blank" rel="noopener">Terms</a>
       <span class="sep">|</span>
       <a data-legal="privacy" href="#" target="_blank" rel="noopener">Privacy</a>
@@ -1629,6 +1635,95 @@
     </div>
     <div class="form-shell" style="max-width:480px;">
       <div id="job-public-content"><!-- rendered by renderPublicJob() --></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       PAGES: MARKETING (About / Careers / Press)
+       ============================================================ -->
+  <div class="page" id="about">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <nav class="nav" data-mode-nav="customer">
+        <button class="nav-btn" onclick="goTo('home')">Home</button>
+        <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
+      </nav>
+      <div class="mode-toggle">
+        <button data-mode="customer" class="on">Customer</button>
+        <button data-mode="notary">Notary</button>
+      </div>
+    </div>
+    <div class="form-shell" style="max-width:560px;">
+      <div class="page-title">About NotaryFinder</div>
+      <div class="page-subtitle">Notarization without the runaround.</div>
+      <div class="card" style="padding:18px;margin-top:8px;line-height:1.7;font-size:11px;color:#444;">
+        <div style="font-size:12px;font-weight:600;color:#000;margin-bottom:6px;">Our mission</div>
+        <p style="margin-bottom:14px;">We're building the fastest way to get a document notarized. Instead of calling around for quotes, you post your job once and verified notaries near you compete in real time — so you get the best price, rating, and availability without the middleman.</p>
+        <div style="font-size:12px;font-weight:600;color:#000;margin-bottom:6px;">Founders</div>
+        <p style="margin-bottom:14px;">NotaryFinder is built by the <strong>Axiom team</strong> — a small group of engineers obsessed with removing friction from everyday paperwork.</p>
+        <div style="font-size:12px;font-weight:600;color:#000;margin-bottom:6px;">Where we are</div>
+        <p>Headquartered in <strong>Fremont, California</strong>, serving the greater Bay Area and growing.</p>
+      </div>
+      <div style="margin-top:14px;text-align:center;"><button class="btn btn-primary btn-sm" onclick="goTo('post-job')">Post a Job</button></div>
+    </div>
+  </div>
+
+  <div class="page" id="careers">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <nav class="nav" data-mode-nav="customer">
+        <button class="nav-btn" onclick="goTo('home')">Home</button>
+        <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
+      </nav>
+      <div class="mode-toggle">
+        <button data-mode="customer" class="on">Customer</button>
+        <button data-mode="notary">Notary</button>
+      </div>
+    </div>
+    <div class="form-shell" style="max-width:560px;">
+      <div class="page-title">Careers</div>
+      <div class="page-subtitle">Grow with NotaryFinder.</div>
+      <div class="card" style="padding:18px;margin-top:8px;line-height:1.7;font-size:11px;color:#444;">
+        <div style="font-size:12px;font-weight:600;color:#000;margin-bottom:6px;">Become a notary on our platform</div>
+        <p style="margin-bottom:10px;">Set your own hours, choose the jobs you want, and get paid fast. Verified notaries on NotaryFinder receive a steady stream of nearby work.</p>
+        <button class="btn btn-primary btn-sm" onclick="setMode('notary')">Sign up as a notary</button>
+        <div style="border-top:1px solid #ebebeb;margin:16px 0;"></div>
+        <div style="font-size:12px;font-weight:600;color:#000;margin-bottom:6px;">We're hiring engineers</div>
+        <p>We're a lean team in Fremont building delightful tools for an old-fashioned industry. Roles open soon — reach out at <a href="mailto:careers@notaryfinder.com">careers@notaryfinder.com</a>. <span style="color:#aaa;">(placeholder)</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page" id="press">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <nav class="nav" data-mode-nav="customer">
+        <button class="nav-btn" onclick="goTo('home')">Home</button>
+        <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
+      </nav>
+      <div class="mode-toggle">
+        <button data-mode="customer" class="on">Customer</button>
+        <button data-mode="notary">Notary</button>
+      </div>
+    </div>
+    <div class="form-shell" style="max-width:560px;">
+      <div class="page-title">Press kit</div>
+      <div class="page-subtitle">Media resources and company facts.</div>
+      <div class="card" style="padding:18px;margin-top:8px;line-height:1.7;font-size:11px;color:#444;">
+        <div style="font-size:12px;font-weight:600;color:#000;margin-bottom:6px;">Company description</div>
+        <p style="margin-bottom:14px;">NotaryFinder is a real-time marketplace connecting people who need documents notarized with verified notaries nearby. Customers post a job; notaries compete with live bids. Founded by the Axiom team and based in Fremont, California.</p>
+        <div style="font-size:12px;font-weight:600;color:#000;margin-bottom:6px;">Logo</div>
+        <p style="margin-bottom:6px;">Download our wordmark for editorial use.</p>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+          <span class="logo" style="font-size:18px;">Notary<em>Finder</em></span>
+          <button class="btn btn-ghost btn-sm" onclick="downloadPressLogo()">Download logo</button>
+        </div>
+        <div style="font-size:12px;font-weight:600;color:#000;margin-bottom:6px;">Press contact</div>
+        <p><a href="mailto:press@notaryfinder.com">press@notaryfinder.com</a></p>
+      </div>
     </div>
   </div>
 
@@ -2617,12 +2712,30 @@ function shareJob(jobId) {
 }
 
 function handleHashRoute() {
-  const m = (location.hash || '').match(/^#\/job\/(.+)$/);
-  if (!m) return false;
-  const jobId = decodeURIComponent(m[1]);
-  goTo('job-public');
-  renderPublicJob(jobId);
-  return true;
+  const hash = location.hash || '';
+  const m = hash.match(/^#\/job\/(.+)$/);
+  if (m) {
+    const jobId = decodeURIComponent(m[1]);
+    goTo('job-public');
+    renderPublicJob(jobId);
+    return true;
+  }
+  // Marketing pages.
+  const page = { '#/about': 'about', '#/careers': 'careers', '#/press': 'press' }[hash];
+  if (page) { goTo(page); return true; }
+  return false;
+}
+
+function downloadPressLogo() {
+  // Generate a simple SVG wordmark and trigger a download.
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="90" viewBox="0 0 360 90"><rect width="360" height="90" fill="#fff"/><text x="20" y="56" font-family="DM Sans, Arial, sans-serif" font-size="34" font-weight="600" fill="#000">Notary<tspan font-style="italic" fill="#2db075">Finder</tspan></text></svg>`;
+  const blob = new Blob([svg], { type: 'image/svg+xml' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'notaryfinder-logo.svg';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('Logo downloaded');
 }
 
 /* Read-only public preview of a job — no sensitive customer info. */
