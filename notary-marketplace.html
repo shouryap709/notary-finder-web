@@ -1229,6 +1229,7 @@
         <button class="nav-btn active" onclick="goTo('home')">Home</button>
         <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
+        <button class="nav-btn" onclick="goTo('account')">Account</button>
       </nav>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle" id="mode-toggle">
@@ -1284,6 +1285,7 @@
         <button class="nav-btn" onclick="goTo('home')">Home</button>
         <button class="nav-btn active" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
+        <button class="nav-btn" onclick="goTo('account')">Account</button>
       </nav>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
@@ -1546,6 +1548,7 @@
         <button class="nav-btn" onclick="goTo('home')">Home</button>
         <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
         <button class="nav-btn active" onclick="goTo('my-job')">My Jobs</button>
+        <button class="nav-btn" onclick="goTo('account')">Account</button>
       </nav>
       <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
       <div class="mode-toggle">
@@ -1556,6 +1559,32 @@
 
     <div class="my-job-shell" id="my-job-content">
       <!-- Rendered dynamically — see renderMyJob() -->
+    </div>
+  </div>
+
+  <!-- ============================================================
+       PAGE: ACCOUNT (customer)
+       ============================================================ -->
+  <div class="page" id="account">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <nav class="nav" data-mode-nav="customer">
+        <button class="nav-btn" onclick="goTo('home')">Home</button>
+        <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
+        <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
+        <button class="nav-btn active" onclick="goTo('account')">Account</button>
+      </nav>
+      <button class="notif-bell" onclick="toggleNotifPanel()" title="Notifications">&#128276;<span class="notif-badge"></span></button>
+      <div class="mode-toggle">
+        <button data-mode="customer" class="on">Customer</button>
+        <button data-mode="notary">Notary</button>
+      </div>
+    </div>
+    <div class="form-shell" style="max-width:460px;">
+      <div class="page-title">Account</div>
+      <div class="page-subtitle">Your referral link and credits.</div>
+      <div id="account-content"><!-- rendered by renderAccount() --></div>
     </div>
   </div>
 
@@ -2238,6 +2267,29 @@ function uid(prefix) {
   return prefix + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
+/* ----- Referral program helpers ----- */
+function genReferralCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for (let i = 0; i < 8; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+// Captured from ?ref=CODE on first load.
+const URL_REFERRAL = new URLSearchParams(location.search).get('ref');
+
+/* Ensure the current customer has a referral code; generate + persist if missing. */
+function ensureReferralCode() {
+  if (!STATE.currentUser) STATE.currentUser = { name: '', email: '' };
+  if (!STATE.currentUser.referralCode) {
+    STATE.currentUser.referralCode = genReferralCode();
+    saveState();
+    if (sb && sbUser) {
+      sb.from('profiles').update({ referral_code: STATE.currentUser.referralCode }).eq('id', sbUser.id).then(() => {}, () => {});
+    }
+  }
+  return STATE.currentUser.referralCode;
+}
+
 function formatTimeAgo(ts) {
   const mins = Math.floor((Date.now() - ts) / 60000);
   if (mins < 1) return 'just now';
@@ -2362,6 +2414,7 @@ function goTo(pageId) {
 
   // Re-render dynamic pages on entry.
   if (pageId === 'my-job') renderMyJob();
+  if (pageId === 'account') renderAccount();
   if (pageId === 'notary-dashboard') { renderDashboard(); renderNotaryHeaderPill(); }
   if (pageId === 'my-bids') { renderMyBids(); renderNotaryHeaderPill(); }
   if (pageId === 'post-job') resetPostJobForm();
@@ -3000,6 +3053,48 @@ function cancelUserJob() {
 
   toast('Job cancelled');
   renderMyJob();
+}
+
+/* ================================================================
+   ACCOUNT (customer) — referral program
+   ================================================================ */
+function renderAccount() {
+  const root = document.getElementById('account-content');
+  if (!root) return;
+  const code = ensureReferralCode();
+  const credits = Number(STATE.currentUser?.referralCredits) || 0;
+  const base = location.origin + location.pathname;
+  const shareUrl = `${base}?ref=${code}`;
+
+  root.innerHTML = `
+    <div class="card" style="padding:16px;margin-bottom:14px;">
+      <div class="section-label" style="margin-bottom:6px;">Your credit balance</div>
+      <div style="font-size:30px;font-weight:600;letter-spacing:-1px;">$${credits.toFixed(2)}</div>
+      <div style="font-size:9.5px;color:#888;margin-top:2px;">Applied automatically to your next job.</div>
+    </div>
+    <div class="card" style="padding:16px;">
+      <div class="section-label" style="margin-bottom:4px;">Refer a friend</div>
+      <div style="font-size:9.5px;color:#777;line-height:1.5;margin-bottom:10px;">
+        Share your link. When a friend completes their first job, you both get <strong>$5</strong>.
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input type="text" class="field-input" id="account-ref-url" readonly value="${escapeHTML(shareUrl)}" style="flex:1;font-size:10px;">
+        <button class="btn btn-primary btn-sm" onclick="copyReferralUrl()">Copy</button>
+      </div>
+      <div style="font-size:9px;color:#aaa;margin-top:8px;">Your code: <strong style="letter-spacing:1px;">${escapeHTML(code)}</strong></div>
+    </div>
+  `;
+}
+
+function copyReferralUrl() {
+  const el = document.getElementById('account-ref-url');
+  if (!el) return;
+  const text = el.value;
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(() => toast('Link copied'), () => { el.select(); document.execCommand('copy'); toast('Link copied'); });
+  } else {
+    el.select(); document.execCommand('copy'); toast('Link copied');
+  }
 }
 
 /* ================================================================
@@ -4088,8 +4183,13 @@ async function sbAuthCustomer(email, password, name) {
         return { pendingVerification: true, email };
       }
       // Auto-confirm enabled — session granted immediately
+      const refCode = STATE.currentUser?.referralCode || genReferralCode();
+      STATE.currentUser = Object.assign({}, STATE.currentUser, { referralCode: refCode, referredByCode: URL_REFERRAL || STATE.currentUser?.referredByCode || null });
+      saveState();
       await sb.from('profiles').upsert({
         id: upData.user.id, role: 'customer', full_name: name, email,
+        referral_code: refCode,
+        referred_by_code: URL_REFERRAL || null,
         terms_accepted_at: new Date().toISOString()
       });
       sbUser = upData.user;
@@ -4443,6 +4543,9 @@ async function sbCompleteJob(jobId) {
 
   // Recurring jobs spawn the next instance automatically.
   if (isRecurring(job)) createRecurringNextInstance(job);
+
+  // Referral reward — first completed job credits both parties $5.
+  grantReferralCreditsIfFirst(job);
   if (sb && sbUser) {
     try {
       const { error } = await sb.from('jobs').update({ status: 'completed' }).eq('id', jobId);
@@ -4462,6 +4565,32 @@ async function sbCompleteJob(jobId) {
       link_target: 'my-bids'
     });
     openReviewModal(jobId, acceptedBid.notaryId, acceptedBid.notaryName);
+  }
+}
+
+/* First completed job for a referred customer grants $5 to both
+   the customer and whoever referred them. */
+function grantReferralCreditsIfFirst(job) {
+  const cu = STATE.currentUser;
+  if (!cu || !job.isUserJob) return;
+  if (cu.referralCredited) return;
+  const completedCount = STATE.jobs.filter(j => j.isUserJob && j.status === 'completed').length;
+  if (completedCount !== 1) return;            // only the very first completion
+  if (!cu.referredByCode) return;              // only referred customers
+
+  cu.referralCredits = (Number(cu.referralCredits) || 0) + 5;
+  cu.referralCredited = true;
+  saveState();
+  toast('You earned a $5 referral credit!');
+
+  if (sb && sbUser) {
+    // Credit the customer.
+    sb.from('profiles').update({ referral_credits: cu.referralCredits }).eq('id', sbUser.id).then(() => {}, () => {});
+    // Credit the referrer (best-effort lookup by code).
+    sb.from('profiles').select('id, referral_credits').eq('referral_code', cu.referredByCode).maybeSingle()
+      .then(({ data }) => {
+        if (data) sb.from('profiles').update({ referral_credits: (Number(data.referral_credits) || 0) + 5 }).eq('id', data.id).then(() => {}, () => {});
+      }, () => {});
   }
 }
 
@@ -5299,6 +5428,12 @@ document.addEventListener('click', e => {
 
   setLegalLinks();
   seedIfEmpty();
+
+  // Remember an incoming referral code for credit on first completed job.
+  if (URL_REFERRAL && STATE.currentUser && !STATE.currentUser.referredByCode) {
+    STATE.currentUser.referredByCode = URL_REFERRAL;
+    saveState();
+  }
   renderStepper();
   updateSuggested();
   // Always boot in customer mode — notary session is in-memory only and
