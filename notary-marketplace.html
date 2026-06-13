@@ -1408,6 +1408,23 @@
   .onboard-dots { display: flex; gap: 6px; justify-content: center; margin-top: 14px; }
   .onboard-dots span { width: 6px; height: 6px; border-radius: 50%; background: #ddd; }
   .onboard-dots span.on { background: #111; }
+
+  /* ---- Pricing page ---- */
+  .price-table { border: 1px solid #eee; border-radius: 12px; overflow: hidden; margin-bottom: 22px; }
+  .price-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; padding: 13px 16px; border-bottom: 1px solid #f2f2f2; }
+  .price-row:last-child { border-bottom: none; }
+  .price-row > span:first-child { font-size: 12px; font-weight: 600; color: #111; }
+  .price-row .pr-note { grid-column: 1; font-size: 9.5px; color: #aaa; }
+  .price-row .pr-amt { grid-column: 2; grid-row: 1 / span 2; font-size: 14px; font-weight: 600; color: #111; }
+  .price-calc { border: 1px solid #eee; border-radius: 12px; padding: 18px; background: #fafafa; }
+  .price-calc-title { font-size: 12px; font-weight: 600; color: #111; margin-bottom: 14px; }
+  .calc-field { margin-bottom: 14px; }
+  .calc-field label { font-size: 11px; color: #555; display: block; margin-bottom: 6px; }
+  .calc-field input[type="range"] { width: 100%; }
+  .calc-field select { width: 100%; padding: 8px 10px; border: 1px solid #e2e2e2; border-radius: 8px; font-size: 11px; }
+  .calc-total { font-size: 13px; color: #111; padding-top: 12px; border-top: 1px solid #eaeaea; }
+  .calc-total strong { font-size: 18px; }
+  .calc-foot { font-size: 10px; color: #999; margin-top: 8px; line-height: 1.5; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -2188,6 +2205,59 @@
       <button class="btn btn-primary btn-sm" onclick="window.print()">Print / Save as PDF</button>
     </div>
     <div id="cert-body" class="cert-sheet"></div>
+  </div>
+
+  <!-- ============================================================
+       PAGE: PRICING TRANSPARENCY  (#/pricing)
+       ============================================================ -->
+  <div class="page" id="pricing">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <nav class="nav" data-mode-nav="customer">
+        <button class="nav-btn" onclick="goTo('home')">Home</button>
+        <button class="nav-btn active" onclick="navRoute('#/pricing')">Pricing</button>
+      </nav>
+      <div class="mode-toggle">
+        <button data-mode="customer" class="on">Customer</button>
+        <button data-mode="notary">Notary</button>
+      </div>
+    </div>
+    <div class="form-shell">
+      <div class="page-title">How pricing works</div>
+      <div class="page-subtitle">Transparent, upfront pricing. Notaries bid below your max — you only pay what they offer.</div>
+
+      <div class="price-table">
+        <div class="price-row"><span>Base fee</span><span class="pr-note">notary commission, travel time</span><span class="pr-amt">$15</span></div>
+        <div class="price-row"><span>Per signature</span><span class="pr-note">each notarized signature</span><span class="pr-amt">$5</span></div>
+        <div class="price-row"><span>Mobile fee</span><span class="pr-note">notary comes to you</span><span class="pr-amt">+$25</span></div>
+        <div class="price-row"><span>Apostille</span><span class="pr-note">international authentication</span><span class="pr-amt">+$30</span></div>
+        <div class="price-row"><span>Loan Signing</span><span class="pr-note">full loan package</span><span class="pr-amt">+$50</span></div>
+        <div class="price-row"><span>Real Estate</span><span class="pr-note">deeds &amp; transfers</span><span class="pr-amt">+$40</span></div>
+      </div>
+
+      <div class="price-calc">
+        <div class="price-calc-title">Estimate your max price</div>
+        <div class="calc-field">
+          <label>Signatures: <strong id="calc-sig-val">1</strong></label>
+          <input type="range" id="calc-sig" min="1" max="15" value="1" oninput="renderPriceCalc()" />
+        </div>
+        <div class="calc-field">
+          <label><input type="checkbox" id="calc-mobile" onchange="renderPriceCalc()" /> Mobile (notary comes to you)</label>
+        </div>
+        <div class="calc-field">
+          <label>Service add-on</label>
+          <select id="calc-service" onchange="renderPriceCalc()">
+            <option value="0">None</option>
+            <option value="30">Apostille (+$30)</option>
+            <option value="50">Loan Signing (+$50)</option>
+            <option value="40">Real Estate (+$40)</option>
+          </select>
+        </div>
+        <div class="calc-total">Suggested max: <strong id="calc-total">$20</strong></div>
+        <div class="calc-foot">Notaries can bid below your max — final price is whatever they offer.</div>
+      </div>
+    </div>
   </div>
 
   <!-- ============================================================
@@ -5668,6 +5738,20 @@ async function renderCertificate(jobId) {
         This document records that a notarization took place; it is not the notarized document itself.
       </div>
     </div>`;
+}
+
+/* ---- Feature 63: Pricing transparency page ---- */
+registerRoute(/^#\/pricing$/, () => { goTo('pricing'); renderPriceCalc(); });
+
+function renderPriceCalc() {
+  const sig = +(document.getElementById('calc-sig')?.value || 1);
+  const mobile = document.getElementById('calc-mobile')?.checked;
+  const addon = +(document.getElementById('calc-service')?.value || 0);
+  const total = 15 + sig * 5 + (mobile ? 25 : 0) + addon;
+  const sigVal = document.getElementById('calc-sig-val');
+  const totalEl = document.getElementById('calc-total');
+  if (sigVal) sigVal.textContent = sig;
+  if (totalEl) totalEl.textContent = '$' + total;
 }
 
 /* ---- Feature 62: Customer onboarding wizard ---- */
