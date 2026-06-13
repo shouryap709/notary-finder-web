@@ -144,6 +144,7 @@
   .mode-toggle button.on {
     background: #000; color: #fff;
   }
+  .lang-toggle button.on { background: #000; color: #fff; }
   .mode-toggle button[data-mode="notary"]:not(.on) { color: #ccc; font-size: 8.5px; }
 
   /* Notary profile pill — shown in notary headers when signed in */
@@ -1239,8 +1240,8 @@
     </div>
 
     <div class="hero-wrap">
-      <h1>Get your documents notarized — <em>let notaries compete for your job.</em></h1>
-      <p class="subtitle">Post your job in 60 seconds. Verified notaries near you bid in real time.<br>You pick the best price, rating, or location. No middleman.</p>
+      <h1 data-i18n-html="hero_h1">Get your documents notarized — <em>let notaries compete for your job.</em></h1>
+      <p class="subtitle" data-i18n-html="hero_sub">Post your job in 60 seconds. Verified notaries near you bid in real time.<br>You pick the best price, rating, or location. No middleman.</p>
       <div class="hero-ctas">
         <button class="btn btn-primary btn-block" onclick="goTo('post-job')">Post a Job</button>
         <button class="notary-link" onclick="setMode('notary')">Are you a notary? Sign in here →</button>
@@ -2418,6 +2419,105 @@ function isFeatured(job) {
   if (!job.isFeatured) return false;
   if (!job.featuredUntil) return true;
   return job.featuredUntil > Date.now();
+}
+
+/* ================================================================
+   i18n — EN/ES toggle
+   ================================================================ */
+let LANG = (() => {
+  try {
+    const saved = localStorage.getItem('lang');
+    if (saved === 'en' || saved === 'es') return saved;
+  } catch (e) {}
+  return (navigator.language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en';
+})();
+
+// English phrase → Spanish. Used by t() and applyLang().
+const I18N_ES = {
+  // Nav
+  'Home': 'Inicio', 'Post a Job': 'Publicar trabajo', 'My Jobs': 'Mis trabajos',
+  'Account': 'Cuenta', 'Dashboard': 'Panel', 'My Bids': 'Mis ofertas', 'Sign In': 'Iniciar sesión',
+  // Mode toggle
+  'Customer': 'Cliente', 'Notary': 'Notario',
+  // Page titles / subtitles
+  'Post a job': 'Publicar un trabajo', 'My bids': 'Mis ofertas', 'Notary sign in': 'Acceso para notarios',
+  'Welcome back': 'Bienvenido de nuevo', 'Set new password': 'Establecer nueva contraseña',
+  'Here are jobs in your area you can bid on.': 'Estos son trabajos en tu zona en los que puedes ofertar.',
+  'Track every bid you\'ve placed.': 'Sigue cada oferta que has hecho.',
+  'Your referral link and credits.': 'Tu enlace de referido y créditos.',
+  'Create your free profile and start receiving jobs in your area.': 'Crea tu perfil gratis y empieza a recibir trabajos en tu zona.',
+  // Buttons
+  'Continue': 'Continuar', 'Back': 'Atrás', 'Skip': 'Omitir', 'Cancel': 'Cancelar',
+  'Submit Bid': 'Enviar oferta', 'Place Bid': 'Hacer oferta', 'Update Bid': 'Actualizar oferta',
+  'Accept Bid': 'Aceptar oferta', 'Save': 'Guardar', 'Copy': 'Copiar', 'Submit Review': 'Enviar reseña',
+  'Cancel job': 'Cancelar trabajo', 'Call notary': 'Llamar al notario', 'Message': 'Mensaje',
+  'Show all': 'Mostrar todo', 'Return now': 'Volver ahora', 'Settings': 'Ajustes', 'Sign Out': 'Cerrar sesión',
+  // Step headings
+  'What needs notarizing?': '¿Qué necesitas notarizar?',
+  'Where should the notary meet you?': '¿Dónde debe encontrarte el notario?',
+  'When do you need it?': '¿Cuándo lo necesitas?',
+  'Set your starting price.': 'Fija tu precio inicial.',
+  'How do we reach you?': '¿Cómo te contactamos?',
+  // Field labels
+  'Number of signatures': 'Número de firmas', 'Number of signers': 'Número de firmantes',
+  'Address or ZIP code': 'Dirección o código postal', 'Notary preference': 'Preferencia de notario',
+  'Your name': 'Tu nombre', 'Email': 'Correo electrónico', 'Your starting price': 'Tu precio inicial',
+  'Repeat': 'Repetir', 'Mobile': 'Móvil', 'In-Office': 'En oficina', 'Either': 'Cualquiera',
+  // Common errors
+  'Pick at least one service.': 'Elige al menos un servicio.',
+  'Enter your address or ZIP.': 'Ingresa tu dirección o código postal.',
+  'Enter a valid email.': 'Ingresa un correo válido.',
+  'Enter your name.': 'Ingresa tu nombre.',
+  // Hero (HTML)
+  'hero_h1': 'Notariza tus documentos — <em>deja que los notarios compitan por tu trabajo.</em>',
+  'hero_sub': 'Publica tu trabajo en 60 segundos. Notarios verificados cerca de ti ofertan en tiempo real.<br>Tú eliges el mejor precio, calificación o ubicación. Sin intermediarios.'
+};
+
+function t(en) {
+  return LANG === 'es' ? (I18N_ES[en] || en) : en;
+}
+
+/* Translate static UI in place. Stores the original English on first run. */
+function applyLang() {
+  // Leaf text elements.
+  const sels = '.nav-btn, .mode-toggle button, .page-title, .page-subtitle, .subtitle, .step-heading, .step-subheading, .hiw-title, .hiw-desc';
+  document.querySelectorAll(sels).forEach(el => {
+    if (el.children.length > 0) return;                 // skip nodes with markup
+    if (!el.dataset.i18nOrig) el.dataset.i18nOrig = el.textContent.trim();
+    const orig = el.dataset.i18nOrig;
+    el.textContent = LANG === 'es' ? (I18N_ES[orig] || orig) : orig;
+  });
+  // HTML elements (hero).
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    const key = el.dataset.i18nHtml;
+    if (!el.dataset.i18nOrigHtml) el.dataset.i18nOrigHtml = el.innerHTML;
+    el.innerHTML = LANG === 'es' ? (I18N_ES[key] || el.dataset.i18nOrigHtml) : el.dataset.i18nOrigHtml;
+  });
+  // Toggle button state.
+  document.querySelectorAll('.lang-toggle button').forEach(b => b.classList.toggle('on', b.dataset.lang === LANG));
+}
+
+function setLang(lang) {
+  LANG = lang;
+  try { localStorage.setItem('lang', lang); } catch (e) {}
+  applyLang();
+}
+
+/* Inject a small EN/ES toggle into every page header. */
+function setupLangToggle() {
+  document.querySelectorAll('.header').forEach(header => {
+    if (header.querySelector('.lang-toggle')) return;
+    const mt = header.querySelector('.mode-toggle');
+    const wrap = document.createElement('div');
+    wrap.className = 'lang-toggle';
+    wrap.style.cssText = 'display:inline-flex;border:1px solid #e6e6e6;border-radius:6px;overflow:hidden;margin-left:auto;margin-right:8px;font-size:8.5px;';
+    wrap.innerHTML = `
+      <button data-lang="en" style="border:none;background:none;padding:3px 7px;cursor:pointer;font-family:inherit;">EN</button>
+      <button data-lang="es" style="border:none;background:none;padding:3px 7px;cursor:pointer;font-family:inherit;">ES</button>`;
+    wrap.querySelectorAll('button').forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
+    if (mt && mt.parentNode) mt.parentNode.insertBefore(wrap, mt);
+    else header.appendChild(wrap);
+  });
 }
 
 /* ================================================================
@@ -5677,6 +5777,8 @@ document.addEventListener('click', e => {
   });
 
   setLegalLinks();
+  setupLangToggle();
+  applyLang();
   seedIfEmpty();
 
   // Remember an incoming referral code for credit on first completed job.
