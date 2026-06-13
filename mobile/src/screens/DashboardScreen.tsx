@@ -8,6 +8,7 @@ import Toast from '../components/Toast';
 import { theme } from '../theme';
 import { fetchMyProfile, fetchOpenJobs, Job } from '../lib/supabase';
 import { distanceMiles } from '../lib/geo';
+import { registerPush } from '../lib/push';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
@@ -42,6 +43,9 @@ export default function DashboardScreen({ navigation, route }: Props) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Register for push notifications once when the dashboard first mounts.
+  useEffect(() => { registerPush(); }, []);
 
   useEffect(() => {
     navigation.setOptions({
