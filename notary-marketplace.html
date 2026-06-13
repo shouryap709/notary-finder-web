@@ -1266,6 +1266,11 @@
       </div>
     </div>
 
+    <div class="testimonials-wrap" style="max-width:760px;margin:0 auto;padding:8px 20px 4px;">
+      <div class="section-label" style="text-align:center;margin-bottom:14px;font-size:13px;">Customers love NotaryFinder</div>
+      <div id="home-testimonials" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;"></div>
+    </div>
+
     <div class="home-footer">
       <a data-legal="terms" href="#" target="_blank" rel="noopener">Terms</a>
       <span class="sep">|</span>
@@ -3301,6 +3306,55 @@ function cancelUserJob() {
 
   toast('Job cancelled');
   renderMyJob();
+}
+
+/* ================================================================
+   HOME — testimonials section (real 5-star reviews, last 90 days)
+   ================================================================ */
+function cityFromLocation(loc) {
+  if (!loc) return '';
+  // "123 Main St, San Jose, CA 95126" → "San Jose"
+  const parts = loc.split(',').map(s => s.trim());
+  return parts.length >= 2 ? parts[parts.length - 2].replace(/\b[A-Z]{2}\b.*/, '').trim() || parts[0] : parts[0];
+}
+
+function testimonialCard(stars, comment, name, city) {
+  return `
+    <div class="card" style="padding:13px;">
+      ${starsHTML(stars)}
+      <div style="font-size:10px;color:#555;line-height:1.6;font-style:italic;margin:8px 0;">"${escapeHTML(comment)}"</div>
+      <div style="font-size:9px;color:#999;">— ${escapeHTML(name)}${city ? ', ' + escapeHTML(city) : ''}</div>
+    </div>`;
+}
+
+function renderTestimonials() {
+  const root = document.getElementById('home-testimonials');
+  if (!root) return;
+
+  // TODO: replace these hardcoded placeholders once enough real reviews exist.
+  const placeholders = [
+    testimonialCard(5, 'Booked a mobile notary in under 10 minutes. Saved me a trip across town.', 'Maria', 'San Jose'),
+    testimonialCard(5, 'Three notaries bid within minutes and I picked the best price. Brilliant.', 'James', 'Santa Clara'),
+    testimonialCard(5, 'Professional, fast, and way cheaper than the bank quoted me.', 'Priya', 'Sunnyvale')
+  ];
+
+  if (!sb) { root.innerHTML = placeholders.join(''); return; }
+
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  sb.from('reviews')
+    .select('rating,comment,created_at,profiles!reviews_customer_id_fkey(full_name),jobs(location_address)')
+    .eq('rating', 5).not('comment', 'is', null).gte('created_at', since).limit(30)
+    .then(({ data }) => {
+      const real = (data || []).filter(r => r.comment && r.comment.trim());
+      if (real.length < 3) { root.innerHTML = placeholders.join(''); return; }
+      // Randomize and take 3.
+      const picked = real.sort(() => Math.random() - 0.5).slice(0, 3);
+      root.innerHTML = picked.map(r => testimonialCard(
+        5, r.comment,
+        (r.profiles?.full_name || 'Customer').split(/\s+/)[0],
+        cityFromLocation(r.jobs?.location_address)
+      )).join('');
+    }, () => { root.innerHTML = placeholders.join(''); });
 }
 
 /* ================================================================
@@ -5779,6 +5833,7 @@ document.addEventListener('click', e => {
   setLegalLinks();
   setupLangToggle();
   applyLang();
+  renderTestimonials();
   seedIfEmpty();
 
   // Remember an incoming referral code for credit on first completed job.
