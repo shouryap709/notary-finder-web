@@ -1323,10 +1323,13 @@
               <button type="button" class="svc-pill" data-svc="Power of Attorney">Power of Attorney</button>
               <button type="button" class="svc-pill" data-svc="Apostille">Apostille</button>
               <button type="button" class="svc-pill" data-svc="Real Estate">Real Estate</button>
+              <button type="button" class="svc-pill" data-svc="Wedding Officiation">Wedding Officiation</button>
               <button type="button" class="svc-pill" data-svc="Other">Other</button>
             </div>
             <div class="field-error">Pick at least one service.</div>
           </div>
+
+          <div id="jf-checklist"><!-- service checklists rendered by renderServiceChecklist() --></div>
 
           <div class="field-row">
             <div class="field">
@@ -2605,7 +2608,38 @@ $servicesGrid.addEventListener('click', e => {
   }
   updateServicesCount();
   updateSuggested();
+  renderServiceChecklist();
 });
+
+/* ----- Service-specific document checklists ----- */
+const SERVICE_CHECKLISTS = {
+  'Loan Signing':        ['Photo ID', 'Closing package', 'Pen with blue ink', 'Witness if required'],
+  'Real Estate':         ['Property documents', "Driver's license", 'All parties present'],
+  'Apostille':           ['Original document', 'Certified copy', 'State acceptance form'],
+  'Wedding Officiation': ['Marriage license', 'Witnesses (2)', 'Rings (optional)']
+};
+const dismissedChecklists = new Set();
+
+function renderServiceChecklist() {
+  const root = document.getElementById('jf-checklist');
+  if (!root) return;
+  const active = [...selectedServices].filter(s => SERVICE_CHECKLISTS[s] && !dismissedChecklists.has(s));
+  root.innerHTML = active.map(svc => `
+    <div class="card" style="padding:11px 13px;margin-bottom:8px;background:#f8fbff;border:1px solid #d8e8fb;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div style="font-size:10px;font-weight:600;color:#2f6bd0;">${escapeHTML(svc)} — bring these</div>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:9px;padding:1px 6px;" onclick="dismissChecklist('${escapeHTML(svc)}')">Dismiss</button>
+      </div>
+      <ul style="margin:0;padding-left:16px;font-size:9.5px;color:#555;line-height:1.7;">
+        ${SERVICE_CHECKLISTS[svc].map(item => `<li>${escapeHTML(item)}</li>`).join('')}
+      </ul>
+    </div>
+  `).join('');
+}
+function dismissChecklist(svc) {
+  dismissedChecklists.add(svc);
+  renderServiceChecklist();
+}
 
 function updateServicesCount() {
   if (!$servicesCount) return;
@@ -2676,6 +2710,8 @@ function resetPostJobForm() {
   $servicesGrid.querySelectorAll('.svc-pill').forEach(p => p.classList.remove('on'));
   updateServicesCount();
   updateSuggested();
+  dismissedChecklists.clear();
+  renderServiceChecklist();
   $jobForm.querySelectorAll('.field').forEach(f => f.classList.remove('has-error'));
   // Clear geocoded location
   jobLocation.lat = null;
