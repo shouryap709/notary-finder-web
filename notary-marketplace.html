@@ -1612,6 +1612,27 @@
   </div>
 
   <!-- ============================================================
+       PAGE: PUBLIC JOB PREVIEW (shareable link)
+       ============================================================ -->
+  <div class="page" id="job-public">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <nav class="nav" data-mode-nav="customer">
+        <button class="nav-btn" onclick="goTo('home')">Home</button>
+        <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
+      </nav>
+      <div class="mode-toggle">
+        <button data-mode="customer" class="on">Customer</button>
+        <button data-mode="notary">Notary</button>
+      </div>
+    </div>
+    <div class="form-shell" style="max-width:480px;">
+      <div id="job-public-content"><!-- rendered by renderPublicJob() --></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
        PAGE: NOTARY DASHBOARD
        ============================================================ -->
   <div class="page" id="notary-dashboard">
@@ -2575,6 +2596,78 @@ function goTo(pageId) {
 }
 
 /* ================================================================
+   Hash routing — shareable #/job/:id links
+   ================================================================ */
+function jobShareUrl(jobId) {
+  return `${location.origin}${location.pathname}#/job/${jobId}`;
+}
+
+function shareJob(jobId) {
+  // Copy the shareable URL without navigating away.
+  const url = jobShareUrl(jobId);
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(url).then(() => toast('Link copied'), () => toast('Link copied'));
+  } else {
+    toast('Link copied');
+  }
+}
+
+function handleHashRoute() {
+  const m = (location.hash || '').match(/^#\/job\/(.+)$/);
+  if (!m) return false;
+  const jobId = decodeURIComponent(m[1]);
+  goTo('job-public');
+  renderPublicJob(jobId);
+  return true;
+}
+
+/* Read-only public preview of a job — no sensitive customer info. */
+function renderPublicJob(jobId) {
+  const root = document.getElementById('job-public-content');
+  if (!root) return;
+  const signedIn = !!(notarySession || sbUser);
+
+  const show = (job) => {
+    if (!job) {
+      root.innerHTML = `<div class="empty-state"><div class="es-title">Job not found.</div><div class="es-sub">This link may have expired.</div><div style="margin-top:14px;"><button class="btn btn-primary btn-sm" onclick="goTo('home')">Go home</button></div></div>`;
+      return;
+    }
+    root.innerHTML = `
+      <div class="page-title" style="display:flex;align-items:center;gap:7px;">${isFeatured(job) ? '<span style="color:#d9a017;">★</span>' : ''}${escapeHTML(jobServiceLabel(job))}</div>
+      <div class="page-subtitle">A notarization job near ${escapeHTML(cityFromLocation(job.location) || 'you')}.</div>
+      <div class="card" style="padding:16px;margin-top:6px;">
+        <div class="job-summary-grid">
+          <div class="job-summary-cell"><div class="lbl">Service</div><div class="val">${escapeHTML(jobServiceLabel(job))}</div></div>
+          <div class="job-summary-cell"><div class="lbl">Signatures</div><div class="val">${job.signatures}</div></div>
+          <div class="job-summary-cell"><div class="lbl">Signers</div><div class="val">${job.numSigners || 1}</div></div>
+          <div class="job-summary-cell"><div class="lbl">Preference</div><div class="val">${escapeHTML(job.notaryPreference)}</div></div>
+          <div class="job-summary-cell"><div class="lbl">When</div><div class="val">${formatDateTime(job.dateTime)}</div></div>
+          <div class="job-summary-cell"><div class="lbl">Customer's max</div><div class="val">$${job.startingPrice}</div></div>
+        </div>
+        <div class="job-card-tags" style="margin-top:10px;">
+          <span class="job-tag">${escapeHTML(cityFromLocation(job.location) || 'Area')}</span>
+          ${isRecurring(job) ? '<span class="job-tag" style="background:#eef6ff;color:#2f6bd0;border-color:#cfe2fb;">↻ Recurring</span>' : ''}
+        </div>
+      </div>
+      <div style="margin-top:16px;text-align:center;">
+        ${signedIn
+          ? `<button class="btn btn-primary btn-block" onclick="setMode('notary')">Go to dashboard to bid</button>`
+          : `<button class="btn btn-primary btn-block" onclick="setMode('notary')">Sign in to bid</button>`}
+      </div>
+    `;
+  };
+
+  const local = STATE.jobs.find(j => j.id === jobId);
+  if (local) { show(local); return; }
+  if (sb) {
+    sb.from('jobs').select('*').eq('id', jobId).maybeSingle()
+      .then(({ data }) => show(data ? rowToJob(data) : null), () => show(null));
+  } else {
+    show(null);
+  }
+}
+
+/* ================================================================
    Mode toggle (Customer / Notary)
    ================================================================ */
 function setMode(mode) {
@@ -3133,7 +3226,10 @@ function renderMyJob(opts = {}) {
           </div>
           ${jobServices(job).length > 1 ? `<div class="job-card-tags" style="margin-top:6px;">${jobServices(job).map(s => `<span class="job-tag">${escapeHTML(s)}</span>`).join('')}</div>` : ''}
         </div>
-        ${!isCancelled && !isCompleted ? `<button class="btn btn-ghost" onclick="cancelUserJob()">Cancel job</button>` : ''}
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" onclick="shareJob('${job.id}')">Share</button>
+          ${!isCancelled && !isCompleted ? `<button class="btn btn-ghost" onclick="cancelUserJob()">Cancel job</button>` : ''}
+        </div>
       </div>
       <div class="job-summary-grid">
         <div class="job-summary-cell">
@@ -5870,7 +5966,10 @@ document.addEventListener('click', e => {
   document.querySelectorAll('.mode-toggle button').forEach(btn => {
     btn.classList.toggle('on', btn.dataset.mode === 'customer');
   });
-  goTo('home');
+
+  // Shareable #/job/:id links.
+  window.addEventListener('hashchange', handleHashRoute);
+  if (!handleHashRoute()) goTo('home');
 
   // Hydrate from Supabase in the background — doesn't block the UI.
   // On success, re-render whatever page is currently active.
