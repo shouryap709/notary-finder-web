@@ -1229,6 +1229,31 @@
   .cookie-banner button.accept { background: #fff; color: #111; border-color: #fff; }
   .cookie-banner button.accept:hover { background: #e8e8e8; }
   .cookie-banner button.decline:hover { border-color: #888; }
+
+  /* ---- Bid comparison view ---- */
+  .compare-toggle {
+    float: right; border: 1px solid #ddd; background: #fff; color: #555;
+    font-size: 10px; font-weight: 600; padding: 4px 11px; border-radius: 7px; cursor: pointer;
+    transition: border-color .14s, color .14s;
+  }
+  .compare-toggle:hover { border-color: #000; color: #000; }
+  .bid-compare-wrap { overflow-x: auto; margin-top: 6px; }
+  .bid-compare { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .bid-compare th, .bid-compare td {
+    border: 1px solid #eee; padding: 8px 10px; text-align: left; vertical-align: top;
+  }
+  .bid-compare thead th { background: #fafafa; }
+  .bid-compare .bc-lbl { color: #999; font-weight: 600; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; width: 84px; }
+  .bid-compare th.bc-cheap { background: #f0faf2; }
+  .bid-compare th.bc-top   { background: #eef4fc; }
+  .bid-compare th.bc-cheap.bc-top { background: #f2f7f5; }
+  .bc-name { font-weight: 600; color: #111; }
+  .bc-tag { display: inline-block; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 1px 6px; border-radius: 10px; margin-top: 4px; margin-right: 3px; }
+  .bc-tag.green { background: #e3f6e8; color: #1f8a3b; }
+  .bc-tag.blue  { background: #e3eefc; color: #2563a8; }
+  .bc-price { font-weight: 600; color: #111; }
+  .bc-price.green { color: #1f8a3b; }
+  .bc-accept { width: 100%; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -2888,9 +2913,66 @@ function renderLiveBids(bids, job, newBidId = null) {
     </div>
   `).join('');
 
+  const compareToggle = bids.length >= 2
+    ? `<button class="compare-toggle" onclick="toggleBidCompare()">${bidCompareMode ? '☰ List view' : '⇄ Compare'}</button>`
+    : '';
+
+  const header = `<div class="section-label">Live bids <span class="count">${bids.length} bid${bids.length !== 1 ? 's' : ''} · sorted by price</span>${compareToggle}</div>`;
+
+  if (bidCompareMode && bids.length >= 2) {
+    return header + renderBidCompareTable(bids);
+  }
+
   return `
-    <div class="section-label">Live bids <span class="count">${bids.length} bid${bids.length !== 1 ? 's' : ''} · sorted by price</span></div>
+    ${header}
     <div class="bid-list">${cards}</div>
+  `;
+}
+
+/* ---- Feature 53: Bid comparison view ---- */
+let bidCompareMode = false;
+
+function toggleBidCompare() {
+  bidCompareMode = !bidCompareMode;
+  renderMyJob();
+}
+
+function bidCompletions(bid) {
+  // completion count — falls back to review count when not separately tracked
+  return bid.notaryCompletions ?? bid.completedJobs ?? bid.notaryReviews ?? 0;
+}
+
+function renderBidCompareTable(bids) {
+  const cheapest = Math.min(...bids.map(b => b.price));
+  const topRating = Math.max(...bids.map(b => b.notaryRating || 0));
+  const cols = bids.map(b => {
+    const isCheap = b.price === cheapest;
+    const isTop = (b.notaryRating || 0) === topRating;
+    return `
+      <th class="bc-col${isCheap ? ' bc-cheap' : ''}${isTop ? ' bc-top' : ''}">
+        <div class="bc-name">${b.notaryName}</div>
+        ${isCheap ? '<span class="bc-tag green">Cheapest</span>' : ''}
+        ${isTop ? '<span class="bc-tag blue">Top rated</span>' : ''}
+      </th>`;
+  }).join('');
+
+  const row = (label, fn) => `
+    <tr><td class="bc-lbl">${label}</td>${bids.map(b => `<td>${fn(b)}</td>`).join('')}</tr>`;
+
+  return `
+    <div class="bid-compare-wrap">
+      <table class="bid-compare">
+        <thead><tr><th class="bc-lbl"></th>${cols}</tr></thead>
+        <tbody>
+          ${row('Price',       b => `<span class="bc-price${b.price === cheapest ? ' green' : ''}">$${b.price}</span>`)}
+          ${row('Rating',      b => `${b.notaryRating || '—'} ★`)}
+          ${row('Distance',    b => b.distance || '—')}
+          ${row('Completions', b => bidCompletions(b))}
+          ${row('Message',     b => b.message ? `"${escapeHTML(b.message)}"` : '—')}
+          ${row('',            b => `<button class="accept-btn bc-accept" onclick="acceptBid('${b.id}')">Accept</button>`)}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
