@@ -1194,6 +1194,22 @@
     .nav-drawer,
     .nav-drawer-backdrop { display: none !important; }
   }
+
+  /* ---- Customer reward tiers ---- */
+  .tier-badge {
+    display: inline-block; vertical-align: middle;
+    font-size: 8.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 20px; margin-left: 6px; line-height: 1.4;
+  }
+  .tier-badge.silver   { background: #eceef0; color: #6b7280; border: 1px solid #d6dadd; }
+  .tier-badge.gold     { background: #fdf6e3; color: #a9821f; border: 1px solid #ecdca6; }
+  .tier-badge.platinum { background: #eef1f6; color: #4b5a78; border: 1px solid #ccd6e6; }
+  .tier-strip {
+    max-width: 360px; margin: 18px auto 0; padding: 12px 16px;
+    border: 1px solid #eee; border-radius: 12px; background: #fafafa; text-align: center;
+  }
+  .tier-strip .tier-perk { font-size: 10.5px; color: #888; margin-top: 6px; }
+  .tier-strip .tier-name { font-size: 12px; font-weight: 600; color: #222; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1244,6 +1260,8 @@
         <button class="btn btn-primary btn-block" onclick="goTo('post-job')">Post a Job</button>
         <button class="notary-link" onclick="setMode('notary')">Are you a notary? Sign in here →</button>
       </div>
+
+      <div class="tier-strip" id="customer-tier-strip" style="display:none"></div>
 
       <div class="how-it-works">
         <div class="hiw-card">
@@ -4908,6 +4926,47 @@ document.addEventListener('click', e => {
 });
 
 /* ================================================================
+   BATCH 5 FEATURES
+   ================================================================ */
+
+/* ---- Feature 51: Customer reward tiers ---- */
+const TIER_PERKS = {
+  silver:   '5% off feature listings',
+  gold:     'Free express tier',
+  platinum: 'Priority support'
+};
+window.customerTier = 'standard';
+
+function tierBadgeHtml(tier) {
+  if (!tier || tier === 'standard') return '';
+  const label = tier.charAt(0).toUpperCase() + tier.slice(1);
+  return `<span class="tier-badge ${tier}">${label}</span>`;
+}
+
+async function loadCustomerTier() {
+  if (!sb || !sbUser) return;
+  try {
+    const { data } = await sb.from('profiles')
+      .select('tier, role, full_name').eq('id', sbUser.id).maybeSingle();
+    if (!data || data.role !== 'customer') return;
+    window.customerTier = data.tier || 'standard';
+    renderCustomerTierStrip(data.full_name);
+  } catch (e) { /* tier is display-only — fail silently */ }
+}
+
+function renderCustomerTierStrip(name) {
+  const el = document.getElementById('customer-tier-strip');
+  if (!el) return;
+  const tier = window.customerTier;
+  if (!tier || tier === 'standard') { el.style.display = 'none'; return; }
+  const label = tier.charAt(0).toUpperCase() + tier.slice(1);
+  el.innerHTML =
+    `<div class="tier-name">${name ? name + ' — ' : ''}${label} member ${tierBadgeHtml(tier)}</div>` +
+    `<div class="tier-perk">Perk: ${TIER_PERKS[tier]}</div>`;
+  el.style.display = 'block';
+}
+
+/* ================================================================
    Boot
    ================================================================ */
 (async () => {
@@ -4936,6 +4995,7 @@ document.addEventListener('click', e => {
       sbUser = session.user;
       sbLoadNotifications();
       sbRealtime.subscribeToNotifications(session.user.id);
+      loadCustomerTier();
     }
   }
 
