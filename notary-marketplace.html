@@ -1380,6 +1380,34 @@
   .blog-article p { font-size: 12.5px; line-height: 1.8; color: #444; margin: 0 0 12px; }
   .blog-article ul { margin: 0 0 12px; padding-left: 20px; }
   .blog-article li { font-size: 12.5px; line-height: 1.7; color: #444; margin-bottom: 5px; }
+
+  /* ---- Onboarding wizard ---- */
+  .onboard-wizard {
+    position: relative; max-width: 420px; margin: 22px auto 0; padding: 22px 22px 18px;
+    border: 1px solid #ececec; border-radius: 16px; background: #fff; box-shadow: 0 4px 18px rgba(0,0,0,.04);
+  }
+  .onboard-dismiss { position: absolute; top: 12px; right: 14px; border: none; background: none; color: #ccc; font-size: 14px; cursor: pointer; }
+  .onboard-dismiss:hover { color: #000; }
+  .onboard-panel { display: none; }
+  .onboard-panel.active { display: block; }
+  .onboard-q { font-size: 13px; font-weight: 600; color: #111; margin-bottom: 14px; text-align: center; }
+  .onboard-chips { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-bottom: 16px; }
+  .onboard-chip {
+    border: 1px solid #e2e2e2; background: #fff; color: #555; font-size: 10.5px; font-weight: 500;
+    padding: 7px 13px; border-radius: 20px; cursor: pointer; transition: all .14s;
+  }
+  .onboard-chip.on { background: #000; color: #fff; border-color: #000; }
+  .onboard-input {
+    width: 100%; padding: 10px 13px; border: 1px solid #e2e2e2; border-radius: 9px;
+    font-size: 12px; outline: none; margin-bottom: 10px; transition: border-color .14s;
+  }
+  .onboard-input:focus { border-color: #000; }
+  .onboard-next { width: 100%; }
+  .onboard-actions { display: flex; gap: 8px; }
+  .onboard-actions .btn { flex: 1; }
+  .onboard-dots { display: flex; gap: 6px; justify-content: center; margin-top: 14px; }
+  .onboard-dots span { width: 6px; height: 6px; border-radius: 50%; background: #ddd; }
+  .onboard-dots span.on { background: #111; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1422,6 +1450,43 @@
         <button data-mode="customer" class="on">Customer</button>
         <button data-mode="notary">Notary</button>
       </div>
+    </div>
+
+    <div class="onboard-wizard" id="onboard-wizard" style="display:none">
+      <button class="onboard-dismiss" onclick="dismissWizard()" title="Dismiss">&#x2715;</button>
+      <div class="onboard-steps">
+        <div class="onboard-panel active" data-ostep="1">
+          <div class="onboard-q">What do you need notarized?</div>
+          <div class="onboard-chips" id="onboard-services">
+            <button type="button" class="onboard-chip" data-svc="Acknowledgment">Acknowledgment</button>
+            <button type="button" class="onboard-chip" data-svc="Loan Signing">Loan Signing</button>
+            <button type="button" class="onboard-chip" data-svc="Power of Attorney">Power of Attorney</button>
+            <button type="button" class="onboard-chip" data-svc="Apostille">Apostille</button>
+            <button type="button" class="onboard-chip" data-svc="Real Estate">Real Estate</button>
+            <button type="button" class="onboard-chip" data-svc="Other">Other</button>
+          </div>
+          <button class="btn btn-primary btn-sm onboard-next" onclick="wizardNext(2)">Next →</button>
+        </div>
+        <div class="onboard-panel" data-ostep="2">
+          <div class="onboard-q">When and where?</div>
+          <input type="datetime-local" id="onboard-date" class="onboard-input" />
+          <input type="text" id="onboard-zip" class="onboard-input" placeholder="ZIP code" inputmode="numeric" />
+          <div class="onboard-actions">
+            <button class="btn btn-secondary btn-sm" onclick="wizardNext(1)">← Back</button>
+            <button class="btn btn-primary btn-sm" onclick="wizardNext(3)">Next →</button>
+          </div>
+        </div>
+        <div class="onboard-panel" data-ostep="3">
+          <div class="onboard-q">What's your name and email?</div>
+          <input type="text" id="onboard-name" class="onboard-input" placeholder="Full name" />
+          <input type="email" id="onboard-email" class="onboard-input" placeholder="you@email.com" />
+          <div class="onboard-actions">
+            <button class="btn btn-secondary btn-sm" onclick="wizardNext(2)">← Back</button>
+            <button class="btn btn-primary btn-sm" onclick="wizardFinish()">Continue →</button>
+          </div>
+        </div>
+      </div>
+      <div class="onboard-dots" id="onboard-dots"></div>
     </div>
 
     <div class="hero-wrap">
@@ -5605,6 +5670,92 @@ async function renderCertificate(jobId) {
     </div>`;
 }
 
+/* ---- Feature 62: Customer onboarding wizard ---- */
+const WIZARD_KEY = 'onboardingWizard';
+let wizardServices = new Set();
+let wizardStep = 1;
+
+function loadWizardProgress() {
+  try { return JSON.parse(localStorage.getItem(WIZARD_KEY) || '{}'); } catch (e) { return {}; }
+}
+function saveWizardProgress(extra) {
+  const data = Object.assign(loadWizardProgress(), {
+    step: wizardStep,
+    services: [...wizardServices],
+    date: document.getElementById('onboard-date')?.value || '',
+    zip: document.getElementById('onboard-zip')?.value || '',
+    name: document.getElementById('onboard-name')?.value || '',
+    email: document.getElementById('onboard-email')?.value || ''
+  }, extra || {});
+  try { localStorage.setItem(WIZARD_KEY, JSON.stringify(data)); } catch (e) {}
+}
+
+function customerHasJobs() {
+  return STATE.jobs.some(j => j.isUserJob);
+}
+
+function initOnboardingWizard() {
+  const prog = loadWizardProgress();
+  if (prog.dismissed || customerHasJobs()) return;
+
+  // restore prior progress
+  (prog.services || []).forEach(s => wizardServices.add(s));
+  if (prog.date)  document.getElementById('onboard-date').value = prog.date;
+  if (prog.zip)   document.getElementById('onboard-zip').value = prog.zip;
+  if (prog.name)  document.getElementById('onboard-name').value = prog.name;
+  if (prog.email) document.getElementById('onboard-email').value = prog.email;
+  wizardStep = prog.step || 1;
+
+  document.getElementById('onboard-services').addEventListener('click', e => {
+    const chip = e.target.closest('.onboard-chip');
+    if (!chip) return;
+    const svc = chip.dataset.svc;
+    if (wizardServices.has(svc)) wizardServices.delete(svc); else wizardServices.add(svc);
+    chip.classList.toggle('on', wizardServices.has(svc));
+    saveWizardProgress();
+  });
+
+  document.getElementById('onboard-services').querySelectorAll('.onboard-chip').forEach(c =>
+    c.classList.toggle('on', wizardServices.has(c.dataset.svc)));
+
+  showWizardStep(wizardStep);
+  document.getElementById('onboard-wizard').style.display = 'block';
+}
+
+function showWizardStep(n) {
+  wizardStep = n;
+  document.querySelectorAll('#onboard-wizard .onboard-panel').forEach(p =>
+    p.classList.toggle('active', +p.dataset.ostep === n));
+  document.getElementById('onboard-dots').innerHTML =
+    [1, 2, 3].map(i => `<span class="${i === n ? 'on' : ''}"></span>`).join('');
+}
+
+function wizardNext(n) { saveWizardProgress(); showWizardStep(n); }
+
+function dismissWizard() {
+  saveWizardProgress({ dismissed: true });
+  document.getElementById('onboard-wizard').style.display = 'none';
+}
+
+function wizardFinish() {
+  saveWizardProgress({ dismissed: true });
+  const prog = loadWizardProgress();
+  goTo('post-job');
+  // Prefill the full post-job form with wizard data.
+  selectedServices.clear();
+  (prog.services || []).forEach(s => selectedServices.add(s));
+  $servicesGrid.querySelectorAll('.svc-pill').forEach(p =>
+    p.classList.toggle('on', selectedServices.has(p.dataset.svc)));
+  updateServicesCount();
+  if (prog.date) $datetime.value = prog.date;
+  if (prog.zip)  $location.value = prog.zip;
+  if (prog.name) $name.value = prog.name;
+  if (prog.email) $email.value = prog.email;
+  updateSuggested();
+  document.getElementById('onboard-wizard').style.display = 'none';
+  setTimeout(() => document.getElementById('post-job')?.scrollIntoView({ behavior: 'smooth' }), 60);
+}
+
 /* ---- Feature 61: Notary blog (static) ---- */
 const BLOG_POSTS = [
   {
@@ -5932,6 +6083,7 @@ async function submitNewsletter(e) {
   initCookieConsent();
   initChangelogDot();
   renderRecentSearches();
+  initOnboardingWizard();
   seedIfEmpty();
   renderStepper();
   updateSuggested();
