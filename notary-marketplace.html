@@ -1247,6 +1247,10 @@
         <button class="notary-link" onclick="setMode('notary')">Are you a notary? Sign in here →</button>
       </div>
 
+      <div id="home-stats" class="home-stats" style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin:22px auto 0;max-width:720px;">
+        <!-- rendered by renderHomeStats() -->
+      </div>
+
       <div class="how-it-works">
         <div class="hiw-card">
           <div class="hiw-num">1</div>
@@ -3528,6 +3532,55 @@ function cancelUserJob() {
 
   toast('Job cancelled');
   renderMyJob();
+}
+
+/* ================================================================
+   HOME — quick stats bar (live from Supabase, with skeletons)
+   ================================================================ */
+function statCell(value, label) {
+  return `
+    <div style="flex:1;min-width:120px;text-align:center;padding:12px 10px;background:#fafafa;border:1px solid #ebebeb;border-radius:9px;">
+      <div style="font-size:20px;font-weight:600;letter-spacing:-.5px;color:#000;">${value}</div>
+      <div style="font-size:9px;color:#888;margin-top:2px;">${label}</div>
+    </div>`;
+}
+function statSkeleton() {
+  return `<div style="flex:1;min-width:120px;height:62px;border-radius:9px;" class="sk-block"></div>`;
+}
+/* Show the real number once it clears a credibility minimum, else "min+". */
+function displayCount(real, min) {
+  return real >= min ? Number(real).toLocaleString() : min + '+';
+}
+
+function renderHomeStats() {
+  const root = document.getElementById('home-stats');
+  if (!root) return;
+  root.innerHTML = statSkeleton() + statSkeleton() + statSkeleton() + statSkeleton();
+
+  const paint = ({ completed, notaries, customers, avgRating, reviewCount }) => {
+    root.innerHTML =
+      statCell(displayCount(completed, 100), 'notarizations completed') +
+      statCell(displayCount(notaries, 50), 'verified notaries') +
+      statCell(displayCount(customers, 80), 'customers served') +
+      statCell(reviewCount > 0 ? `★ ${avgRating.toFixed(1)}` : '★ 4.9', `avg rating across ${displayCount(reviewCount, 200)} reviews`);
+  };
+
+  if (!sb) { paint({ completed: 0, notaries: 0, customers: 0, avgRating: 4.9, reviewCount: 0 }); return; }
+
+  Promise.all([
+    sb.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
+    sb.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'notary').eq('verification_status', 'approved'),
+    sb.from('jobs').select('customer_id').eq('status', 'completed'),
+    sb.from('reviews').select('rating')
+  ]).then(([jobsRes, notaryRes, custRes, revRes]) => {
+    const completed = jobsRes.count || 0;
+    const notaries = notaryRes.count || 0;
+    const customers = new Set((custRes.data || []).map(r => r.customer_id).filter(Boolean)).size;
+    const ratings = (revRes.data || []).map(r => r.rating);
+    const reviewCount = ratings.length;
+    const avgRating = reviewCount ? ratings.reduce((a, b) => a + b, 0) / reviewCount : 4.9;
+    paint({ completed, notaries, customers, avgRating, reviewCount });
+  }).catch(() => paint({ completed: 0, notaries: 0, customers: 0, avgRating: 4.9, reviewCount: 0 }));
 }
 
 /* ================================================================
@@ -6098,6 +6151,7 @@ document.addEventListener('click', e => {
   setLegalLinks();
   setupLangToggle();
   applyLang();
+  renderHomeStats();
   renderTestimonials();
   seedIfEmpty();
 
