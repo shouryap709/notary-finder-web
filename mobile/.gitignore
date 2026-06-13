@@ -1,0 +1,27 @@
+# React Native / Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Metro
+.metro-health-check*
+metro.config.js.bak
+
+# iOS
+ios/Pods/
+ios/build/
+*.xcworkspace
+!default.xcworkspace
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+*.keystore
+!debug.keystore
+
+# Misc
+.DS_Store
+*.log
+.env
+coverage/
