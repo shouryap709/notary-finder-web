@@ -6,6 +6,7 @@ import { RootStackParamList } from '../../App';
 import Button from '../components/Button';
 import { theme } from '../theme';
 import { getSession, signInNotary, signUpOrInNotary } from '../lib/supabase';
+import { authenticateBiometric, isBiometricEnabled, maybeOfferBiometric } from '../lib/biometrics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
 
@@ -18,10 +19,23 @@ export default function AuthScreen({ navigation }: Props) {
   const [checking, setChecking] = useState(true);
 
   // Restore an existing session on launch (AsyncStorage-backed).
+  // If biometric unlock is enabled, gate the dashboard behind it.
   useEffect(() => {
-    getSession()
-      .then(session => { if (session) navigation.replace('Dashboard'); })
-      .finally(() => setChecking(false));
+    (async () => {
+      try {
+        const session = await getSession();
+        if (!session) return;
+        if (await isBiometricEnabled()) {
+          const ok = await authenticateBiometric('Unlock NotaryFinder');
+          if (ok) navigation.replace('Dashboard');
+          // On failure: fall back to password login (stay on this screen).
+        } else {
+          navigation.replace('Dashboard');
+        }
+      } finally {
+        setChecking(false);
+      }
+    })();
   }, [navigation]);
 
   async function submit() {
@@ -40,6 +54,8 @@ export default function AuthScreen({ navigation }: Props) {
       } else {
         await signInNotary(email.trim(), password);
       }
+      // First successful login — offer biometric unlock for next time.
+      await maybeOfferBiometric();
       navigation.replace(mode === 'up' ? 'ServicesChecklist' : 'Dashboard');
     } catch (e: any) {
       Alert.alert('Sign in failed', e?.message || 'Please try again.');
