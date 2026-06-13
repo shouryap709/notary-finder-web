@@ -3529,6 +3529,13 @@ $bmSubmit.addEventListener('click', async () => {
     return;
   }
 
+  // Booking buffer — block bids that collide with another accepted job.
+  if (bufferConflict(job)) {
+    $bmPriceErr.textContent = `You have another job within ${bufferMinutes()} min of this time.`;
+    field.classList.add('has-error');
+    return;
+  }
+
   // Client-side ceiling validation — blocks before any state mutation.
   if (!price || price < 1) {
     $bmPriceErr.textContent = 'Enter a valid bid amount.';
