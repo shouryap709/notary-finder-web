@@ -1662,7 +1662,15 @@
         </div>
       </div>
 
-      <div class="section-label">Available jobs <span class="count" id="dash-job-count"></span></div>
+      <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Available jobs <span class="count" id="dash-job-count"></span></span>
+        <select id="dash-spec-filter" onchange="feedSpecFilter=this.value;renderDashboard()" style="font-family:inherit;font-size:9px;padding:3px 6px;border:1px solid #e6e6e6;border-radius:6px;color:#666;">
+          <option value="">All specializations</option>
+          <option value="Loan Signing">Loan Signing Pro</option>
+          <option value="Apostille">Apostille Specialist</option>
+          <option value="Real Estate">Real Estate Expert</option>
+        </select>
+      </div>
       <div class="dash-jobs-list" id="dash-jobs-list">
         <!-- Rendered dynamically -->
       </div>
@@ -3179,6 +3187,7 @@ function renderLiveBids(bids, job, newBidId = null) {
             <span class="rcnt">(${bid.notaryReviews} reviews)</span>
           </div>
           <div class="bid-meta">${bid.distance} away · bid ${formatTimeAgo(bid.placedAt)}</div>
+          ${Array.isArray(bid.specializations) && bid.specializations.length ? `<div class="job-card-tags" style="margin-top:4px;">${bid.specializations.map(s => `<span class="job-tag" style="font-size:8px;background:#f0f7f3;color:#1d7a4d;border-color:#cce8d8;">${escapeHTML(s)}</span>`).join('')}</div>` : ''}
         </div>
         <div class="bid-price-block">
           <div class="bid-price">$${bid.price}</div>
@@ -3478,6 +3487,13 @@ function renderDashboard() {
     .sort((a, b) => (rank(b.j) - rank(a.j)) || (a.i - b.i))
     .map(x => x.j);
 
+  // Specialization filter (maps to a service type).
+  if (feedSpecFilter) {
+    filteredJobs = filteredJobs.filter(j => jobServices(j).includes(feedSpecFilter));
+  }
+  const _specSel = document.getElementById('dash-spec-filter');
+  if (_specSel) _specSel.value = feedSpecFilter;
+
   // Out of office — hide all open jobs and surface a return banner.
   const oooBanner = document.getElementById('dash-distance-banner');
   if (oooActive()) {
@@ -3742,7 +3758,7 @@ $bmSubmit.addEventListener('click', async () => {
   // Use the real signed-in notary when Supabase is active, else fall back to demo notary.
   const me = notarySession
     ? { id: sbUser?.id || STATE.notaryUser.id, name: notarySession.name,
-        rating: 5.0, reviews: 0, distance: '—' }
+        rating: 5.0, reviews: 0, distance: '—', specializations: notarySession.specializations || [] }
     : STATE.notaries.find(n => n.id === STATE.notaryUser.id);
   if (!me) return;
 
@@ -3765,6 +3781,7 @@ $bmSubmit.addEventListener('click', async () => {
       id: uid('b'), jobId: job.id, notaryId: me.id,
       notaryName: me.name, notaryRating: me.rating, notaryReviews: me.reviews,
       distance: me.distance, price, message: $bmMessage.value.trim(),
+      specializations: me.specializations || [],
       status: 'pending', placedAt: Date.now()
     };
     STATE.bids.push(targetBid);
@@ -3835,6 +3852,7 @@ async function instantBook(jobId) {
    ================================================================ */
 let activeBidsTab = 'active';
 let showAllJobs   = false;
+let feedSpecFilter = '';   // service-type filter from the specialization dropdown
 
 document.getElementById('bid-tabs').addEventListener('click', e => {
   const btn = e.target.closest('.tab-btn');
@@ -5626,7 +5644,7 @@ async function fetchNotaryProfile(notaryId) {
   try {
     const [profileRes, reviewsRes] = await Promise.all([
       sb.from('profiles')
-        .select('id,full_name,business_name,rating,reviews_count,verification_status,services,created_at')
+        .select('id,full_name,business_name,rating,reviews_count,verification_status,services,specializations,created_at')
         .eq('id', notaryId)
         .maybeSingle(),
       sb.from('reviews')
@@ -5696,8 +5714,10 @@ function renderNotaryProfileContent({ profile: p, recentReviews, completedJobs }
     ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     : '—';
   const services = Array.isArray(p.services) ? p.services : [];
+  const specs = Array.isArray(p.specializations) ? p.specializations : [];
 
   return `
+    ${specs.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">${specs.map(s => `<span class="job-tag" style="font-size:9px;background:#f0f7f3;color:#1d7a4d;border-color:#cce8d8;">${escapeHTML(s)}</span>`).join('')}</div>` : ''}
     <div style="display:flex;gap:14px;margin-bottom:18px;align-items:flex-start;">
       <div class="pm-avatar">${initialsFor(p.full_name || '?')}</div>
       <div style="flex:1;min-width:0;">
