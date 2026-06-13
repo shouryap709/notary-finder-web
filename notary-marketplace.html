@@ -2483,6 +2483,8 @@ const $stepperEl     = document.getElementById('stepper');
 let currentPref = 'Mobile';
 let userTouchedPrice = false;
 let selectedServices = new Set();    // multi-select services for the new job
+let pendingPrefill = null;           // set by hireAgain() to pre-fill the form
+let invitedNotaryId = null;          // direct-invite target for the next posted job
 
 /* ----- Stepper rendering ----- */
 function renderStepper() {
@@ -2620,7 +2622,42 @@ function resetPostJobForm() {
   if (docName) { docName.textContent = ''; docName.style.display = 'none'; }
   const docProgress = document.getElementById('jf-doc-progress');
   if (docProgress) { docProgress.textContent = ''; docProgress.className = 'upload-progress'; }
+
+  // Apply a pending pre-fill (from "Hire again").
+  if (pendingPrefill) {
+    const p = pendingPrefill;
+    (p.services || []).forEach(s => {
+      selectedServices.add(s);
+      const pill = $servicesGrid.querySelector(`.svc-pill[data-svc="${CSS.escape(s)}"]`);
+      if (pill) pill.classList.add('on');
+    });
+    if (p.signatures) $signatures.value = p.signatures;
+    if (p.location)   $location.value = p.location;
+    if (p.notaryPreference) {
+      currentPref = p.notaryPreference;
+      $prefGroup.querySelectorAll('.radio-pill').forEach(pl => pl.classList.toggle('on', pl.dataset.val === currentPref));
+    }
+    updateServicesCount();
+    updateSuggested();
+    pendingPrefill = null;
+  }
+
   goToStep(1);
+}
+
+/* Re-post a job to the same notary as a direct invitation. */
+function hireAgain(notaryId, jobId) {
+  const job = STATE.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  pendingPrefill = {
+    services: jobServices(job).slice(),
+    signatures: job.signatures,
+    location: job.location,
+    notaryPreference: job.notaryPreference
+  };
+  invitedNotaryId = notaryId;
+  goTo('post-job');
+  toast('We pre-filled your last job — invite sent on post');
 }
 
 /* ----- Per-step validation -----
@@ -2693,6 +2730,7 @@ $jobForm.addEventListener('submit', async e => {
     recurrence: document.getElementById('jf-recurrence')?.value || 'none',
     recurrenceParentId: null,
     allowInstantBook: !!document.getElementById('jf-instant-book')?.checked,
+    invitedNotaryId: invitedNotaryId || null,
     status: 'open',
     acceptedBidId: null,
     postedAt: Date.now(),
@@ -2755,6 +2793,7 @@ $jobForm.addEventListener('submit', async e => {
   // Simulate a few notaries bidding on this fresh job over the next few seconds.
   seedBidsForUserJob(job);
 
+  invitedNotaryId = null;   // consumed
   setLoading(submitBtn, false);
   toast('Job posted — notaries are bidding now');
   goTo('my-job');
@@ -2982,6 +3021,9 @@ function renderConfirmedCard(bid, job) {
         </div>
       </div>
       <div class="confirmed-actions">
+        ${job.status === 'completed'
+          ? `<button class="btn btn-primary btn-sm" onclick="hireAgain('${bid.notaryId}','${job.id}')">Hire ${escapeHTML(bid.notaryName.split(/\s+/)[0])} again</button>`
+          : ''}
         ${job.status === 'accepted'
           ? `<button class="btn btn-ghost btn-sm" onclick="sbCompleteJob('${job.id}')">Mark as completed</button>`
           : ''}
@@ -3162,10 +3204,15 @@ function renderDashboard() {
   }
 
   // Filter by max travel (respect showAllJobs toggle)
-  const filteredJobs = (hasHome && !showAllJobs)
+  let filteredJobs = (hasHome && !showAllJobs)
     ? openJobs.filter(j => j._distMi === null || j._distMi <= maxMi)
     : openJobs;
   const hiddenCount = openJobs.length - filteredJobs.length;
+
+  // Direct invitations (Hire again) float to the top of the feed.
+  const myNotaryId = sbUser?.id || STATE.notaryUser.id;
+  const isInvited = j => j.invitedNotaryId && j.invitedNotaryId === myNotaryId;
+  filteredJobs = [...filteredJobs.filter(isInvited), ...filteredJobs.filter(j => !isInvited(j))];
 
   // Distance / filter banner
   const bannerEl = document.getElementById('dash-distance-banner');
@@ -3222,6 +3269,7 @@ function renderDashboard() {
               <span class="job-tag">${job.notaryPreference}</span>
               <span class="job-tag">${formatDateTime(job.dateTime)}</span>
               ${isRecurring(job) ? `<span class="job-tag" style="background:#eef6ff;color:#2f6bd0;border-color:#cfe2fb;">↻ Recurring</span>` : ''}
+              ${isInvited(job) ? '<span class="job-tag" style="background:#2db075;color:#fff;border-color:#2db075;">★ Direct invitation</span>' : ''}
               ${job.isUserJob ? '<span class="job-tag" style="background:#000;color:#fff;">Your customer</span>' : ''}
             </div>
           </div>
@@ -4277,7 +4325,8 @@ function jobToRow(job) {
     accepted_bid_id:  job.acceptedBidId || null,
     recurrence:       job.recurrence || 'none',
     recurrence_parent_id: job.recurrenceParentId || null,
-    allow_instant_book: !!job.allowInstantBook
+    allow_instant_book: !!job.allowInstantBook,
+    invited_notary_id: job.invitedNotaryId || null
   };
 }
 
@@ -4304,6 +4353,7 @@ function rowToJob(row) {
     recurrenceParentId:    row.recurrence_parent_id || null,
     allowInstantBook:      !!row.allow_instant_book,
     tipAmount:             Number(row.tip_amount) || 0,
+    invitedNotaryId:       row.invited_notary_id || null,
     documentFilePath:      row.document_file_path || null,
     signedDocumentFilePath: row.signed_document_file_path || null,
     customerId:            row.customer_id || null,
