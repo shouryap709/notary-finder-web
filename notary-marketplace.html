@@ -1297,6 +1297,17 @@
   .dash-feed-tab.on { background: #000; color: #fff; border-color: #000; }
   .save-job-btn { border: none; background: none; cursor: pointer; font-size: 16px; color: #c9c9c9; line-height: 1; padding: 2px 4px; }
   .save-job-btn.saved { color: #f0b400; }
+
+  /* ---- 83: Messages ---- */
+  .msg-badge { display: inline-block; background: var(--accent-red, #e53935); color: #fff; font-size: 8px; font-weight: 700; border-radius: 10px; padding: 1px 5px; margin-left: 2px; }
+  .msg-row { margin-bottom: 10px; display: flex; flex-direction: column; }
+  .msg-row.mine { align-items: flex-end; }
+  .msg-row.theirs { align-items: flex-start; }
+  .msg-bubble { max-width: 78%; font-size: 11.5px; line-height: 1.5; padding: 8px 11px; border-radius: 12px; position: relative; }
+  .msg-row.mine .msg-bubble { background: #000; color: #fff; border-bottom-right-radius: 3px; }
+  .msg-row.theirs .msg-bubble { background: #f1f1f1; color: #111; border-bottom-left-radius: 3px; }
+  .msg-time { display: block; font-size: 8px; opacity: .6; margin-top: 3px; }
+  .msg-receipt { font-size: 8px; color: #999; margin-top: 2px; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -2032,6 +2043,24 @@
     </div>
     <div class="np-list" id="np-list">
       <div class="np-empty">No notifications yet.</div>
+    </div>
+  </div>
+
+  <!-- Messages thread modal -->
+  <div class="overlay" id="msg-overlay">
+    <div class="modal" style="max-width:360px;width:360px;">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <div class="modal-title">Messages</div>
+          <div class="modal-sub" id="msg-sub">Job thread</div>
+        </div>
+        <button class="modal-close" onclick="closeMessages()">&#x2715;</button>
+      </div>
+      <div class="modal-body" id="msg-thread" style="max-height:300px;overflow-y:auto;"></div>
+      <div class="modal-foot" style="display:flex;gap:8px;">
+        <input id="msg-input" class="field-input" style="flex:1;font-size:11px;" placeholder="Type a message…" onkeydown="if(event.key==='Enter')sendMessage()">
+        <button class="btn btn-primary btn-sm" onclick="sendMessage()">Send</button>
+      </div>
     </div>
   </div>
 
@@ -3052,7 +3081,7 @@ function renderConfirmedCard(bid, job) {
           ? `<button class="btn btn-ghost btn-sm" onclick="sbCompleteJob('${job.id}')">Mark as completed</button>`
           : ''}
         <button class="btn btn-primary btn-sm" onclick="toast('Calling ${bid.notaryName}…')">Call notary</button>
-        <button class="btn btn-secondary btn-sm" onclick="toast('Message sent')">Message</button>
+        <button class="btn btn-secondary btn-sm" onclick="openMessages('${job.id}','customer')">Messages${msgUnreadBadge(job.id, 'customer')}</button>
         ${job.signedDocumentFilePath
           ? `<button class="btn btn-ghost btn-sm" onclick="openSignedUrl('job-documents','${job.signedDocumentFilePath}')">Download signed doc</button>`
           : ''}
@@ -3540,14 +3569,95 @@ function renderMyBidsList() {
                <button class="btn btn-ghost btn-sm" onclick="cancelBid('${b.id}')">Withdraw bid</button>
              </div>`
           : ''}
-        ${b.status === 'accepted' && job && job.status === 'accepted'
-          ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);">
-               <button class="btn btn-ghost btn-sm" style="color:var(--accent-red);" onclick="notaryCancelAccepted('${job.id}')">Cancel appointment</button>
+        ${b.status === 'accepted' && job && (job.status === 'accepted' || job.status === 'completed')
+          ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);display:flex;gap:6px;">
+               <button class="btn btn-secondary btn-sm" onclick="openMessages('${job.id}','notary')">Messages${msgUnreadBadge(job.id, 'notary')}</button>
+               ${job.status === 'accepted' ? `<button class="btn btn-ghost btn-sm" style="color:var(--accent-red);" onclick="notaryCancelAccepted('${job.id}')">Cancel appointment</button>` : ''}
              </div>`
           : ''}
       </div>
     `;
   }).join('');
+}
+
+/* ---- 83: Messages + read receipts ---- */
+let msgCtx = { jobId: null, role: null };
+function allMessages() { STATE.messages = STATE.messages || []; return STATE.messages; }
+function messagesForJob(jobId) { return allMessages().filter(m => m.jobId === jobId).sort((a, b) => a.ts - b.ts); }
+function msgUnreadCount(jobId, role) {
+  return messagesForJob(jobId).filter(m => m.senderRole !== role && !m.readAt).length;
+}
+function msgUnreadBadge(jobId, role) {
+  const n = msgUnreadCount(jobId, role);
+  return n ? ` <span class="msg-badge">${n}</span>` : '';
+}
+function openMessages(jobId, role) {
+  msgCtx = { jobId, role };
+  document.getElementById('msg-overlay').classList.add('open');
+  markMessagesRead(jobId, role);
+  renderMessages();
+  if (sb) subscribeMessages(jobId);
+}
+function closeMessages() {
+  document.getElementById('msg-overlay').classList.remove('open');
+  if (sb && msgChannel) { sb.removeChannel(msgChannel); msgChannel = null; }
+  // refresh badges on whatever page is active
+  if (document.getElementById('my-job')?.classList.contains('active')) renderMyJob();
+  if (document.getElementById('my-bids')?.classList.contains('active')) renderMyBids();
+}
+function markMessagesRead(jobId, role) {
+  let changed = false;
+  messagesForJob(jobId).forEach(m => {
+    if (m.senderRole !== role && !m.readAt) { m.readAt = Date.now(); changed = true; }
+  });
+  if (changed) {
+    saveState();
+    if (sb) {
+      sb.from('messages').update({ read_at: new Date().toISOString() })
+        .eq('job_id', jobId).is('read_at', null).neq('sender_role', role).then(() => {}, () => {});
+    }
+  }
+}
+function renderMessages() {
+  const thread = document.getElementById('msg-thread');
+  const msgs = messagesForJob(msgCtx.jobId);
+  if (msgs.length === 0) { thread.innerHTML = `<div class="np-empty">No messages yet. Say hello.</div>`; return; }
+  thread.innerHTML = msgs.map(m => {
+    const mine = m.senderRole === msgCtx.role;
+    const time = new Date(m.ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const receipt = mine && m.readAt
+      ? `<div class="msg-receipt">Read ${new Date(m.readAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>`
+      : '';
+    return `<div class="msg-row ${mine ? 'mine' : 'theirs'}">
+        <div class="msg-bubble">${escapeHTML(m.body)}<span class="msg-time">${time}</span></div>${receipt}
+      </div>`;
+  }).join('');
+  thread.scrollTop = thread.scrollHeight;
+}
+function sendMessage() {
+  const input = document.getElementById('msg-input');
+  const body = (input.value || '').trim();
+  if (!body || !msgCtx.jobId) return;
+  const msg = { id: uid('m'), jobId: msgCtx.jobId, senderRole: msgCtx.role, body, ts: Date.now(), readAt: null };
+  allMessages().push(msg);
+  saveState();
+  input.value = '';
+  renderMessages();
+  if (sb && sbUser) {
+    sb.from('messages').insert({
+      job_id: msgCtx.jobId, sender_id: sbUser.id, sender_role: msgCtx.role, body
+    }).then(() => {}, e => console.warn('[Supabase] message insert:', e));
+  }
+}
+let msgChannel = null;
+function subscribeMessages(jobId) {
+  if (!sb) return;
+  if (msgChannel) sb.removeChannel(msgChannel);
+  msgChannel = sb.channel('messages:' + jobId)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: 'job_id=eq.' + jobId }, () => {
+      // On any change (new message or read receipt) re-mark + re-render.
+      if (msgCtx.jobId === jobId) { markMessagesRead(jobId, msgCtx.role); renderMessages(); }
+    }).subscribe();
 }
 
 /* ---- 82: Notary saved jobs ---- */
