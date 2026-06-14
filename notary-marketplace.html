@@ -1277,6 +1277,9 @@
   .cal-sub-row input { flex: 1; border: 1px solid #e2e2e2; border-radius: 8px; padding: 8px 10px; font-size: 10px; color: #555; background: #fafafa; }
   .cal-sub-help { font-size: 9.5px; color: #999; line-height: 1.7; margin-bottom: 10px; }
   .cal-sub-help strong { color: #555; display: block; margin-top: 4px; }
+
+  /* ---- 80: Backup / featured ---- */
+  .urgent-tag { background: #111 !important; color: #ffd23f !important; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -3146,6 +3149,9 @@ function renderDashboard() {
     openJobs.sort((a, b) => b.postedAt - a.postedAt);
   }
 
+  // Featured (urgent backup) jobs float to the top (80)
+  openJobs.sort((a, b) => (jobIsFeatured(b) ? 1 : 0) - (jobIsFeatured(a) ? 1 : 0));
+
   // Hide jobs outside the notary's business hours (76)
   openJobs = openJobs.filter(jobWithinBusinessHours);
 
@@ -3210,6 +3216,7 @@ function renderDashboard() {
               <span class="job-tag">${job.notaryPreference}</span>
               <span class="job-tag">${formatDateTime(job.dateTime)}</span>
               ${holidayName(job.dateTime) ? `<span class="job-tag holiday-tag" title="+50% suggested">🎄 Holiday · +50% suggested</span>` : ''}
+              ${jobIsFeatured(job) ? '<span class="job-tag urgent-tag">⚡ Backup needed</span>' : ''}
               ${job.isUserJob ? '<span class="job-tag" style="background:#000;color:#fff;">Your customer</span>' : ''}
             </div>
           </div>
@@ -3502,9 +3509,77 @@ function renderMyBidsList() {
                <button class="btn btn-ghost btn-sm" onclick="cancelBid('${b.id}')">Withdraw bid</button>
              </div>`
           : ''}
+        ${b.status === 'accepted' && job && job.status === 'accepted'
+          ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);">
+               <button class="btn btn-ghost btn-sm" style="color:var(--accent-red);" onclick="notaryCancelAccepted('${job.id}')">Cancel appointment</button>
+             </div>`
+          : ''}
       </div>
     `;
   }).join('');
+}
+
+/* ---- 80: Backup notary system ---- */
+function jobIsFeatured(job) {
+  return !!job.isFeatured && (!job.featuredUntil || job.featuredUntil > Date.now());
+}
+async function notaryCancelAccepted(jobId) {
+  const job = STATE.jobs.find(j => j.id === jobId);
+  if (!job || job.status !== 'accepted') return;
+  const hoursUntil = job.dateTime ? (new Date(job.dateTime) - Date.now()) / 3600000 : 999;
+  const lastMinute = hoursUntil < 24;
+  if (!confirm(lastMinute
+    ? 'This appointment is within 24 hours. Cancelling will urgently re-open it to backup notaries. Continue?'
+    : 'Cancel this appointment? The job will re-open for bids.')) return;
+
+  // Re-open the job and release the accepted bid.
+  const acceptedBid = STATE.bids.find(b => b.id === job.acceptedBidId);
+  if (acceptedBid) acceptedBid.status = 'cancelled';
+  job.status = 'open';
+  job.acceptedBidId = null;
+  if (lastMinute) {
+    job.isFeatured = true;
+    job.featuredUntil = Date.now() + 24 * 60 * 60 * 1000;
+  }
+  saveState();
+
+  if (sb) {
+    try {
+      // Re-open + feature flag in the DB
+      await sb.from('jobs').update({
+        status: 'open', accepted_bid_id: null,
+        is_featured: lastMinute, featured_until: lastMinute ? new Date(job.featuredUntil).toISOString() : null
+      }).eq('id', jobId);
+
+      // Notify nearby approved notaries that a backup is needed.
+      const { data: notaries } = await sb.from('profiles')
+        .select('id, home_lat, home_lng, max_travel_mi')
+        .eq('role', 'notary').eq('verification_status', 'approved');
+      const targets = (notaries || []).filter(n => {
+        if (job.locationLat == null || n.home_lat == null) return true;
+        const d = haversineMiles(n.home_lat, n.home_lng, job.locationLat, job.locationLng);
+        return d <= (n.max_travel_mi || 25);
+      });
+      await Promise.all(targets.map(n => sbCreateNotification({
+        userId: n.id, type: 'backup_needed',
+        title: 'Backup needed urgently',
+        body: `A ${jobServiceLabel(job)} job near ${job.location} needs a notary ${lastMinute ? 'within 24h' : 'soon'}.`,
+        link_target: jobId
+      })));
+
+      // Notify the customer.
+      if (job.customerId || sbUser) {
+        await sbCreateNotification({
+          userId: job.customerId || null, type: 'notary_cancelled',
+          title: 'Your notary cancelled',
+          body: "We've re-opened your job and notified backup notaries nearby."
+        });
+      }
+    } catch (e) { console.warn('[Supabase] backup system:', e); }
+  }
+
+  toast(lastMinute ? 'Appointment cancelled — backup notaries notified.' : 'Appointment cancelled — job re-opened.');
+  renderMyBids();
 }
 
 /* ================================================================
