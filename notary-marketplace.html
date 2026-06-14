@@ -1269,6 +1269,14 @@
   .nps-num.on { background: #000; color: #fff; border-color: #000; }
   .nps-scale-labels { display: flex; justify-content: space-between; font-size: 8.5px; color: #bbb; margin-bottom: 10px; }
   .nps-comment { width: 100%; border: 1px solid #e2e2e2; border-radius: 8px; padding: 8px 10px; font-size: 11px; min-height: 52px; resize: vertical; margin-bottom: 10px; font-family: inherit; }
+
+  /* ---- 79: Calendar subscribe ---- */
+  .cal-sub { border: 1px solid #ececec; border-radius: 12px; padding: 15px; margin-top: 16px; }
+  .cal-sub-title { font-size: 12px; font-weight: 600; color: #111; margin-bottom: 10px; }
+  .cal-sub-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .cal-sub-row input { flex: 1; border: 1px solid #e2e2e2; border-radius: 8px; padding: 8px 10px; font-size: 10px; color: #555; background: #fafafa; }
+  .cal-sub-help { font-size: 9.5px; color: #999; line-height: 1.7; margin-bottom: 10px; }
+  .cal-sub-help strong { color: #555; display: block; margin-top: 4px; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -2928,7 +2936,7 @@ function renderMyJob(opts = {}) {
       ? renderConfirmedCard(acceptedBid, job)
       : renderLiveBids(bids, job, opts.newBidId || null);
 
-  root.innerHTML = npsSurveyHtml() + statusBanner + summaryHTML + bidsSection;
+  root.innerHTML = npsSurveyHtml() + statusBanner + summaryHTML + bidsSection + calendarSubscribeHtml();
 }
 
 function renderLiveBids(bids, job, newBidId = null) {
@@ -3855,6 +3863,89 @@ function createAndPersistJob(fields, opts = {}) {
   else { sbSaveJob(job).catch(() => {}); }
   if (!opts.skipSeed) seedBidsForUserJob(job);
   return job;
+}
+
+/* ---- 79: Calendar iCal subscription feed ---- */
+registerRoute(/^#\/calendar\/(.+)\.ics$/, (m) => downloadIcsForUser(decodeURIComponent(m[1])));
+
+function icsUserId() { return sbUser?.id || 'me'; }
+function icsFeedUrl() {
+  return `${location.origin}${location.pathname}#/calendar/${icsUserId()}.ics`;
+}
+function icsEscape(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+}
+function icsDate(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+}
+function buildIcs(jobs) {
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//NotaryFinder//Jobs//EN', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:NotaryFinder Jobs'];
+  jobs.forEach(j => {
+    if (!j.dateTime) return;
+    const start = new Date(j.dateTime);
+    if (isNaN(start)) return;
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    lines.push('BEGIN:VEVENT');
+    lines.push(`UID:${j.id}@notaryfinder`);
+    lines.push(`DTSTAMP:${icsDate(new Date())}`);
+    lines.push(`DTSTART:${icsDate(start)}`);
+    lines.push(`DTEND:${icsDate(end)}`);
+    lines.push(`SUMMARY:${icsEscape('Notary: ' + jobServiceLabel(j))}`);
+    lines.push(`LOCATION:${icsEscape(j.location)}`);
+    lines.push(`DESCRIPTION:${icsEscape((j.signatures || 1) + ' signature(s) · ' + (j.notaryPreference || ''))}`);
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+async function downloadIcsForUser(userId) {
+  let jobs = STATE.jobs.filter(j => j.isUserJob && j.dateTime && new Date(j.dateTime) >= new Date(Date.now() - 86400000));
+  if (sb && userId && userId !== 'me') {
+    try {
+      const { data } = await sb.from('jobs')
+        .select('id,service_type,services,signatures,notary_preference,location_address,date_time')
+        .eq('customer_id', userId)
+        .gte('date_time', new Date(Date.now() - 86400000).toISOString());
+      if (data && data.length) {
+        jobs = data.map(r => ({
+          id: r.id, services: r.services || (r.service_type ? [r.service_type] : []),
+          signatures: r.signatures, notaryPreference: r.notary_preference,
+          location: r.location_address, dateTime: r.date_time
+        }));
+      }
+    } catch (e) { /* fall back to local */ }
+  }
+  const ics = buildIcs(jobs);
+  const blob = new Blob([ics], { type: 'text/calendar' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'notaryfinder.ics';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('Calendar downloaded (.ics)');
+}
+function calendarSubscribeHtml() {
+  const url = icsFeedUrl();
+  return `
+    <div class="cal-sub">
+      <div class="cal-sub-title">Subscribe to your job calendar</div>
+      <div class="cal-sub-row">
+        <input id="cal-sub-url" type="text" readonly value="${escapeHTML(url)}">
+        <button class="btn btn-secondary btn-sm" onclick="copyCalUrl()">Copy</button>
+      </div>
+      <div class="cal-sub-help">
+        <strong>Google Calendar:</strong> Other calendars → From URL → paste.
+        <strong>Apple Calendar:</strong> File → New Calendar Subscription → paste.
+        <strong>Outlook:</strong> Add calendar → Subscribe from web → paste.
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="downloadIcsForUser('${icsUserId()}')">Download .ics now</button>
+    </div>`;
+}
+function copyCalUrl() {
+  const el = document.getElementById('cal-sub-url');
+  el.select();
+  navigator.clipboard?.writeText(el.value).then(() => toast('Calendar URL copied'), () => toast('Copy failed'));
 }
 
 /* ---- 78: NPS survey ---- */
