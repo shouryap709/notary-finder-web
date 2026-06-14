@@ -1252,6 +1252,10 @@
   .bh-row select { font-size: 10px; padding: 4px 6px; border: 1px solid #e2e2e2; border-radius: 6px; }
   .bh-row select:disabled { opacity: .4; }
   .bh-dash { text-align: center; color: #bbb; }
+
+  /* ---- 77: Holidays ---- */
+  .holiday-note { margin-top: 8px; padding: 8px 11px; background: #fff8e1; border: 1px solid #f3e0a3; border-radius: 7px; font-size: 9.5px; color: #8a6d1f; line-height: 1.5; }
+  .holiday-tag { background: #fdecea !important; color: #b3261e !important; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1442,8 +1446,9 @@
 
           <div class="field">
             <label class="field-label" for="jf-datetime">Preferred date & time</label>
-            <input type="datetime-local" id="jf-datetime" class="field-input" required>
+            <input type="datetime-local" id="jf-datetime" class="field-input" required oninput="onDateTimeHolidayCheck()">
             <div class="field-error">Pick a date and time.</div>
+            <div id="jf-holiday-note" class="holiday-note" style="display:none;"></div>
           </div>
 
           <div class="field">
@@ -2648,6 +2653,12 @@ function validateStep(step) {
     // Notary preference always has a default — no validation needed.
   } else if (step === 3) {
     ok = flag('jf-datetime', !!$datetime.value) && ok;
+    if (ok && holidayBlocked()) {
+      flag('jf-datetime', false);
+      const note = document.getElementById('jf-holiday-note');
+      if (note) note.style.color = 'var(--accent-red,#e53935)';
+      ok = false;
+    }
   } else if (step === 4) {
     // Price defaults to suggested but require a positive number.
     ok = flag('jf-price', $price.value && +$price.value > 0) && ok;
@@ -3177,6 +3188,7 @@ function renderDashboard() {
             <div class="job-card-tags">
               <span class="job-tag">${job.notaryPreference}</span>
               <span class="job-tag">${formatDateTime(job.dateTime)}</span>
+              ${holidayName(job.dateTime) ? `<span class="job-tag holiday-tag" title="+50% suggested">🎄 Holiday · +50% suggested</span>` : ''}
               ${job.isUserJob ? '<span class="job-tag" style="background:#000;color:#fff;">Your customer</span>' : ''}
             </div>
           </div>
@@ -3830,6 +3842,54 @@ function createAndPersistJob(fields, opts = {}) {
   else { sbSaveJob(job).catch(() => {}); }
   if (!opts.skipSeed) seedBidsForUserJob(job);
   return job;
+}
+
+/* ---- 77: US federal holiday auto-block ---- */
+const US_HOLIDAYS = {
+  // 2026
+  '2026-01-01': "New Year's Day", '2026-01-19': 'MLK Jr. Day', '2026-02-16': "Presidents' Day",
+  '2026-05-25': 'Memorial Day', '2026-06-19': 'Juneteenth', '2026-07-03': 'Independence Day (observed)',
+  '2026-07-04': 'Independence Day', '2026-09-07': 'Labor Day', '2026-10-12': 'Columbus Day',
+  '2026-11-11': 'Veterans Day', '2026-11-26': 'Thanksgiving', '2026-12-25': 'Christmas Day',
+  // 2027
+  '2027-01-01': "New Year's Day", '2027-01-18': 'MLK Jr. Day', '2027-02-15': "Presidents' Day",
+  '2027-05-31': 'Memorial Day', '2027-06-18': 'Juneteenth (observed)', '2027-06-19': 'Juneteenth',
+  '2027-07-05': 'Independence Day (observed)', '2027-07-04': 'Independence Day', '2027-09-06': 'Labor Day',
+  '2027-10-11': 'Columbus Day', '2027-11-11': 'Veterans Day', '2027-11-25': 'Thanksgiving', '2027-12-24': 'Christmas Day (observed)', '2027-12-25': 'Christmas Day',
+  // 2028
+  '2028-01-01': "New Year's Day", '2028-01-17': 'MLK Jr. Day', '2028-02-21': "Presidents' Day",
+  '2028-05-29': 'Memorial Day', '2028-06-19': 'Juneteenth', '2028-07-04': 'Independence Day',
+  '2028-09-04': 'Labor Day', '2028-10-09': 'Columbus Day', '2028-11-10': 'Veterans Day (observed)',
+  '2028-11-11': 'Veterans Day', '2028-11-23': 'Thanksgiving', '2028-12-25': 'Christmas Day'
+};
+function dateKey(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function holidayName(dateTimeStr) {
+  if (!dateTimeStr) return null;
+  const d = new Date(dateTimeStr);
+  if (isNaN(d)) return null;
+  return US_HOLIDAYS[dateKey(d)] || null;
+}
+function onDateTimeHolidayCheck() {
+  const note = document.getElementById('jf-holiday-note');
+  if (!note) return;
+  const name = holidayName(document.getElementById('jf-datetime').value);
+  if (name) {
+    note.style.display = 'block';
+    note.innerHTML = `<strong>${name} (Holiday)</strong> — notaries may charge more or be unavailable.
+      <label style="display:block;margin-top:5px;font-weight:500;"><input type="checkbox" id="jf-holiday-ok"> Post on this holiday anyway</label>`;
+  } else {
+    note.style.display = 'none';
+    note.innerHTML = '';
+  }
+}
+/* Called from validateStep(3): block holiday unless override confirmed. */
+function holidayBlocked() {
+  const name = holidayName(document.getElementById('jf-datetime')?.value);
+  if (!name) return false;
+  return !document.getElementById('jf-holiday-ok')?.checked;
 }
 
 /* ---- 75: Job duplication ---- */
