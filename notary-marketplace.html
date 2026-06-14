@@ -1194,6 +1194,37 @@
     .nav-drawer,
     .nav-drawer-backdrop { display: none !important; }
   }
+
+  /* ================================================================
+     BATCH 6 FEATURE STYLES
+     ================================================================ */
+
+  /* ---- 71: Support chat widget ---- */
+  .help-fab {
+    position: absolute; bottom: 18px; right: 18px; z-index: 55;
+    width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+    background: #000; color: #fff; font-size: 19px; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,.22); transition: transform .14s;
+  }
+  .help-fab:hover { transform: scale(1.06); }
+  .help-panel {
+    position: absolute; bottom: 70px; right: 18px; z-index: 56; width: 300px;
+    background: #fff; border: 1px solid #ececec; border-radius: 14px;
+    box-shadow: 0 10px 34px rgba(0,0,0,.16); padding: 16px; display: none;
+  }
+  .help-panel.open { display: block; }
+  .help-title { font-size: 13px; font-weight: 600; color: #111; }
+  .help-sub { font-size: 10px; color: #999; margin: 2px 0 12px; }
+  .help-faq { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .help-faq a { font-size: 9.5px; color: #555; background: #f3f3f3; border-radius: 20px; padding: 4px 9px; text-decoration: none; cursor: pointer; }
+  .help-faq a:hover { background: #e9e9e9; }
+  .help-panel input, .help-panel textarea {
+    width: 100%; border: 1px solid #e2e2e2; border-radius: 9px; padding: 9px 11px;
+    font-size: 11.5px; outline: none; margin-bottom: 9px; font-family: inherit;
+  }
+  .help-panel textarea { min-height: 74px; resize: vertical; }
+  .help-panel input:focus, .help-panel textarea:focus { border-color: #000; }
+  .help-msg { font-size: 10.5px; color: #1f8a3b; min-height: 14px; margin-top: 2px; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1889,6 +1920,22 @@
     <div class="np-list" id="np-list">
       <div class="np-empty">No notifications yet.</div>
     </div>
+  </div>
+
+  <!-- Support chat widget -->
+  <button class="help-fab" id="help-fab" title="Help" onclick="toggleHelpPanel()">?</button>
+  <div class="help-panel" id="help-panel">
+    <div class="help-title">How can we help?</div>
+    <div class="help-sub">We'll email you within 24h.</div>
+    <div class="help-faq">
+      <a onclick="toast('Notaries bid below your max — you pick the best.')">How pricing works</a>
+      <a onclick="toast('Post a job and verified notaries nearby bid in real time.')">How it works</a>
+      <a onclick="toast('Yes — every notary is identity- and commission-verified.')">Are notaries verified?</a>
+    </div>
+    <input type="email" id="help-email" placeholder="your@email.com" />
+    <textarea id="help-message" placeholder="Tell us what's going on…"></textarea>
+    <button class="btn btn-primary btn-sm" style="width:100%;" onclick="submitSupportTicket()">Submit</button>
+    <div class="help-msg" id="help-msg"></div>
   </div>
 
   <!-- Mobile nav drawer — toggled by hamburger on small screens -->
@@ -4908,6 +4955,58 @@ document.addEventListener('click', e => {
 });
 
 /* ================================================================
+   BATCH 6 FEATURES
+   ================================================================ */
+
+/* ---- Shared hash router (used by #/calendar/:id.ics etc.) ---- */
+const HASH_ROUTES = [];
+function registerRoute(re, handler) { HASH_ROUTES.push({ re, handler }); }
+function navRoute(hash) {
+  if (location.hash === hash) handleHashRoute();
+  else location.hash = hash;
+}
+function handleHashRoute() {
+  const h = location.hash || '';
+  if (!h.startsWith('#/')) return false;
+  for (const { re, handler } of HASH_ROUTES) {
+    const m = h.match(re);
+    if (m) { handler(m); return true; }
+  }
+  return false;
+}
+window.addEventListener('hashchange', handleHashRoute);
+
+/* ---- 71: Support chat widget ---- */
+let helpPanelOpen = false;
+function toggleHelpPanel() {
+  helpPanelOpen = !helpPanelOpen;
+  document.getElementById('help-panel').classList.toggle('open', helpPanelOpen);
+}
+async function submitSupportTicket() {
+  const emailEl = document.getElementById('help-email');
+  const msgEl   = document.getElementById('help-message');
+  const out     = document.getElementById('help-msg');
+  const email   = (emailEl.value || '').trim();
+  const message = (msgEl.value || '').trim();
+  if (!message) { out.style.color = 'var(--accent-red,#e53935)'; out.textContent = 'Please add a message.'; return; }
+  out.style.color = '#1f8a3b';
+  if (sb) {
+    try {
+      const { error } = await sb.from('support_tickets').insert({
+        user_id: sbUser?.id || null, email: email || (sbUser?.email ?? null), message
+      });
+      if (error) throw error;
+    } catch (e) {
+      out.style.color = 'var(--accent-red,#e53935)';
+      out.textContent = 'Something went wrong — try again.';
+      return;
+    }
+  }
+  emailEl.value = ''; msgEl.value = '';
+  out.textContent = "Thanks, we'll email you within 24h.";
+}
+
+/* ================================================================
    Boot
    ================================================================ */
 (async () => {
@@ -4956,6 +5055,7 @@ document.addEventListener('click', e => {
     btn.classList.toggle('on', btn.dataset.mode === 'customer');
   });
   goTo('home');
+  handleHashRoute();   // honor deep-linked #/route on first load
 
   // Hydrate from Supabase in the background — doesn't block the UI.
   // On success, re-render whatever page is currently active.
