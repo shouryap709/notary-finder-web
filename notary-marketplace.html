@@ -1243,6 +1243,15 @@
   .bulk-grid .field-input { font-size: 11px; padding: 8px 10px; }
   .bulk-progress { font-size: 11px; color: #888; margin-top: 10px; min-height: 14px; }
   .bulk-progress.error { color: var(--accent-red, #e53935); }
+
+  /* ---- 76: Business hours grid ---- */
+  .bh-grid { display: flex; flex-direction: column; gap: 6px; }
+  .bh-row { display: grid; grid-template-columns: 38px 64px 1fr 12px 1fr; align-items: center; gap: 6px; font-size: 10px; }
+  .bh-day { font-weight: 600; color: #333; }
+  .bh-closed { color: #999; font-size: 9px; display: flex; align-items: center; gap: 3px; }
+  .bh-row select { font-size: 10px; padding: 4px 6px; border: 1px solid #e2e2e2; border-radius: 6px; }
+  .bh-row select:disabled { opacity: .4; }
+  .bh-dash { text-align: center; color: #bbb; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -3105,10 +3114,13 @@ function renderDashboard() {
     openJobs.sort((a, b) => b.postedAt - a.postedAt);
   }
 
-  // Filter by max travel (respect showAllJobs toggle)
-  const filteredJobs = (hasHome && !showAllJobs)
-    ? openJobs.filter(j => j._distMi === null || j._distMi <= maxMi)
-    : openJobs;
+  // Hide jobs outside the notary's business hours (76)
+  openJobs = openJobs.filter(jobWithinBusinessHours);
+
+  // Filter by service area polygon (85) when set, else max travel (respect showAllJobs)
+  const filteredJobs = showAllJobs
+    ? openJobs
+    : openJobs.filter(j => jobWithinServiceArea(j, { homeLat, homeLng, maxMi, hasHome }));
   const hiddenCount = openJobs.length - filteredJobs.length;
 
   // Distance / filter banner
@@ -3943,11 +3955,100 @@ setInterval(() => {
   });
 }, 30000);
 
-/* ---- Stubs filled in by features 76 (business hours) & 85 (service area) ---- */
-function nsBusinessHoursHtml() { return ''; }
+/* ---- 76: Notary business hours ---- */
+const DOW_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
+const DOW_LABELS = { mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun' };
+const DEFAULT_BUSINESS_HOURS = { mon:[9,17], tue:[9,17], wed:[9,17], thu:[9,17], fri:[9,17], sat:null, sun:null };
+// JS Date.getDay(): 0=Sun..6=Sat → map to our keys
+const JSDAY_TO_KEY = ['sun','mon','tue','wed','thu','fri','sat'];
+
+function currentBusinessHours() {
+  return notarySession?.businessHours || DEFAULT_BUSINESS_HOURS;
+}
+function hourOptions(sel) {
+  let out = '';
+  for (let h = 0; h <= 23; h++) {
+    const lbl = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`;
+    out += `<option value="${h}" ${h === sel ? 'selected' : ''}>${lbl}</option>`;
+  }
+  return out;
+}
+function nsBusinessHoursHtml() {
+  const bh = currentBusinessHours();
+  const rows = DOW_KEYS.map(k => {
+    const v = bh[k];
+    const closed = !v;
+    const open = v ? v[0] : 9, close = v ? v[1] : 17;
+    return `
+      <div class="bh-row" data-day="${k}">
+        <span class="bh-day">${DOW_LABELS[k]}</span>
+        <label class="bh-closed"><input type="checkbox" class="bh-closed-cb" ${closed ? 'checked' : ''} onchange="nsToggleBhRow('${k}')"> closed</label>
+        <select class="bh-open" ${closed ? 'disabled' : ''}>${hourOptions(open)}</select>
+        <span class="bh-dash">–</span>
+        <select class="bh-close" ${closed ? 'disabled' : ''}>${hourOptions(close)}</select>
+      </div>`;
+  }).join('');
+  return `<div class="field"><label class="field-label">Business hours</label><div class="bh-grid">${rows}</div></div>`;
+}
+function nsToggleBhRow(k) {
+  const row = document.querySelector(`.bh-row[data-day="${k}"]`);
+  if (!row) return;
+  const closed = row.querySelector('.bh-closed-cb').checked;
+  row.querySelector('.bh-open').disabled = closed;
+  row.querySelector('.bh-close').disabled = closed;
+}
+function nsCollectBusinessHours() {
+  const rows = document.querySelectorAll('.bh-row');
+  if (!rows.length || !notarySession) return;
+  const bh = {};
+  rows.forEach(row => {
+    const k = row.dataset.day;
+    if (row.querySelector('.bh-closed-cb').checked) { bh[k] = null; }
+    else {
+      const o = +row.querySelector('.bh-open').value;
+      const c = +row.querySelector('.bh-close').value;
+      bh[k] = [o, c];
+    }
+  });
+  notarySession.businessHours = bh;
+}
+/* True if a job's date_time falls within the notary's open hours. */
+function jobWithinBusinessHours(job) {
+  const bh = notarySession?.businessHours;
+  if (!bh || !job.dateTime) return true;
+  const d = new Date(job.dateTime);
+  if (isNaN(d)) return true;
+  const v = bh[JSDAY_TO_KEY[d.getDay()]];
+  if (!v) return false;            // closed that day
+  const hr = d.getHours();
+  return hr >= v[0] && hr < v[1];
+}
+
+/* ---- Service area (default = max-travel; extended by feature 85) ---- */
 function nsServiceAreaHtml() { return ''; }
-function nsCollectBusinessHours() {}
 let nsPolygonVertices = [];
+function jobWithinServiceArea(job, ctx) {
+  // Polygon takes precedence when the notary has drawn one (feature 85).
+  const poly = notarySession?.serviceAreaPolygon;
+  if (poly && poly.length >= 3 && job.locationLat != null && job.locationLng != null) {
+    return pointInPolygon(job.locationLat, job.locationLng, poly);
+  }
+  // Fallback: haversine vs max travel distance.
+  if (!ctx.hasHome) return true;
+  return job._distMi === null || job._distMi <= ctx.maxMi;
+}
+/* Ray-casting point-in-polygon. poly = [[lat,lng],...] */
+function pointInPolygon(lat, lng, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const yi = poly[i][0], xi = poly[i][1];
+    const yj = poly[j][0], xj = poly[j][1];
+    const intersect = ((yi > lat) !== (yj > lat)) &&
+      (lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
 
 /* ================================================================
    LEGAL LINKS — set href on all data-legal anchors from LEGAL_URLS
