@@ -1311,6 +1311,9 @@
 
   /* ---- 84: Group bookings ---- */
   .group-toggle { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #333; cursor: pointer; }
+
+  /* ---- 85: Service area map ---- */
+  .ns-area-map { height: 180px; border-radius: 9px; border: 1px solid #e6e6e6; overflow: hidden; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -4019,6 +4022,7 @@ function toggleNotarySettings() {
     panel.style.display = 'none';
     panel.innerHTML = '';
     nsMap = null; nsMarker = null;
+    nsAreaMap = null; nsAreaLayer = null; nsDrawing = false;
     return;
   }
   const addr  = notarySession?.homeAddress || '';
@@ -4066,6 +4070,7 @@ function toggleNotarySettings() {
         nsGeoTimer = setTimeout(() => geocodeNsAddress(addrEl.value), 600);
       });
     }
+    nsInitServiceAreaMap();
   }, 80);
 }
 
@@ -4568,9 +4573,72 @@ function jobWithinBusinessHours(job) {
   return hr >= v[0] && hr < v[1];
 }
 
-/* ---- Service area (default = max-travel; extended by feature 85) ---- */
-function nsServiceAreaHtml() { return ''; }
+/* ---- 85: Service area drawing tool ---- */
 let nsPolygonVertices = [];
+let nsAreaMap = null, nsAreaLayer = null, nsDrawing = false;
+function nsServiceAreaHtml() {
+  return `
+    <div class="field">
+      <label class="field-label">Service area <span class="field-label-meta">(optional — overrides max travel)</span></label>
+      <div id="ns-area-map" class="ns-area-map"></div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button type="button" class="btn btn-secondary btn-sm" id="ns-draw-btn" onclick="nsToggleDraw()">Draw your service area</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="nsClearArea()">Clear</button>
+      </div>
+      <div class="field-label-meta" id="ns-area-hint" style="margin-top:6px;">Tap the map to add boundary points; the area closes automatically.</div>
+    </div>`;
+}
+function nsInitServiceAreaMap() {
+  const el = document.getElementById('ns-area-map');
+  if (!el || !window.L) return;
+  nsPolygonVertices = Array.isArray(notarySession?.serviceAreaPolygon) ? notarySession.serviceAreaPolygon.slice() : [];
+  const center = (notarySession?.homeLat) ? [notarySession.homeLat, notarySession.homeLng] : [37.3382, -121.8863];
+  nsAreaMap = L.map('ns-area-map', { zoomControl: true }).setView(center, 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(nsAreaMap);
+  nsRedrawArea();
+  nsAreaMap.on('click', e => {
+    if (!nsDrawing) return;
+    nsPolygonVertices.push([e.latlng.lat, e.latlng.lng]);
+    nsRedrawArea();
+  });
+}
+function nsRedrawArea() {
+  if (!nsAreaMap) return;
+  if (nsAreaLayer) { nsAreaLayer.remove(); nsAreaLayer = null; }
+  if (nsPolygonVertices.length >= 2) {
+    nsAreaLayer = (nsPolygonVertices.length >= 3 ? L.polygon : L.polyline)(
+      nsPolygonVertices, { color: '#000', weight: 2, fillOpacity: 0.08 }
+    ).addTo(nsAreaMap);
+  } else if (nsPolygonVertices.length === 1) {
+    nsAreaLayer = L.circleMarker(nsPolygonVertices[0], { radius: 4, color: '#000' }).addTo(nsAreaMap);
+  }
+}
+function nsToggleDraw() {
+  nsDrawing = !nsDrawing;
+  const btn = document.getElementById('ns-draw-btn');
+  const hint = document.getElementById('ns-area-hint');
+  if (nsDrawing) {
+    nsPolygonVertices = [];
+    nsRedrawArea();
+    btn.textContent = 'Done drawing';
+    if (hint) hint.textContent = 'Tap the map to add boundary points…';
+  } else {
+    btn.textContent = 'Draw your service area';
+    if (hint) hint.textContent = nsPolygonVertices.length >= 3 ? `${nsPolygonVertices.length}-point area set.` : 'Tap the map to add boundary points; the area closes automatically.';
+  }
+}
+function nsClearArea() {
+  nsPolygonVertices = [];
+  nsDrawing = false;
+  if (notarySession) notarySession.serviceAreaPolygon = null;
+  nsRedrawArea();
+  const btn = document.getElementById('ns-draw-btn');
+  if (btn) btn.textContent = 'Draw your service area';
+  const hint = document.getElementById('ns-area-hint');
+  if (hint) hint.textContent = 'Service area cleared — using max travel distance.';
+}
 function jobWithinServiceArea(job, ctx) {
   // Polygon takes precedence when the notary has drawn one (feature 85).
   const poly = notarySession?.serviceAreaPolygon;
