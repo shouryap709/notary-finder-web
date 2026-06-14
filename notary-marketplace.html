@@ -1233,6 +1233,16 @@
 
   /* ---- 73: Bid expiry chip ---- */
   .bid-expiry { color: #c08a1f; font-weight: 600; }
+
+  /* ---- 74: Bulk posting ---- */
+  .bulk-row { border: 1px solid #eee; border-radius: 11px; padding: 13px; margin-bottom: 10px; }
+  .bulk-row-head { font-size: 11px; font-weight: 600; color: #111; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .bulk-remove { border: none; background: none; color: #c9c9c9; cursor: pointer; font-size: 12px; margin-left: auto; }
+  .bulk-remove:hover { color: #000; }
+  .bulk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .bulk-grid .field-input { font-size: 11px; padding: 8px 10px; }
+  .bulk-progress { font-size: 11px; color: #888; margin-top: 10px; min-height: 14px; }
+  .bulk-progress.error { color: var(--accent-red, #e53935); }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1281,6 +1291,7 @@
       <p class="subtitle">Post your job in 60 seconds. Verified notaries near you bid in real time.<br>You pick the best price, rating, or location. No middleman.</p>
       <div class="hero-ctas">
         <button class="btn btn-primary btn-block" onclick="goTo('post-job')">Post a Job</button>
+        <button class="notary-link" onclick="goTo('bulk-post')">Post Multiple Jobs →</button>
         <button class="notary-link" onclick="setMode('notary')">Are you a notary? Sign in here →</button>
       </div>
 
@@ -1896,6 +1907,33 @@
   </div>
 
   <!-- ============================================================
+       PAGE: BULK JOB POSTING
+       ============================================================ -->
+  <div class="page" id="bulk-post">
+    <div class="header">
+      <button class="menu-btn"><span></span><span></span><span></span></button>
+      <div class="logo" onclick="goTo('home')">Notary<em>Finder</em></div>
+      <nav class="nav" data-mode-nav="customer">
+        <button class="nav-btn" onclick="goTo('home')">Home</button>
+        <button class="nav-btn" onclick="goTo('post-job')">Post a Job</button>
+        <button class="nav-btn" onclick="goTo('my-job')">My Jobs</button>
+      </nav>
+      <div class="mode-toggle">
+        <button data-mode="customer" class="on">Customer</button>
+        <button data-mode="notary">Notary</button>
+      </div>
+    </div>
+    <div class="form-shell">
+      <div class="page-title">Post multiple jobs</div>
+      <div class="page-subtitle">Add up to 10 jobs and post them all at once.</div>
+      <div id="bulk-rows"></div>
+      <button class="btn btn-secondary btn-sm" id="bulk-add" onclick="bulkAddRow()" style="margin-top:6px;">+ Add another</button>
+      <div id="bulk-progress" class="bulk-progress"></div>
+      <button class="btn btn-primary" id="bulk-submit" style="width:100%;margin-top:14px;" onclick="submitBulkJobs()">Post all jobs</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
        NOTARY APP MODAL — shown every time a user enters notary mode
        ============================================================ -->
   <div class="overlay" id="notary-app-overlay">
@@ -2376,6 +2414,7 @@ function goTo(pageId) {
   if (pageId === 'notary-dashboard') { renderCommissionBanner(); renderDashboard(); renderNotaryHeaderPill(); }
   if (pageId === 'my-bids') { renderMyBids(); renderNotaryHeaderPill(); }
   if (pageId === 'post-job') resetPostJobForm();
+  if (pageId === 'bulk-post') { bulkRenderRows(1); document.getElementById('bulk-progress').textContent = ''; }
 
   // Realtime lifecycle — subscribe for live updates.
   if (sb) {
@@ -3743,6 +3782,105 @@ function commissionExpired() {
   const raw = notarySession?.commissionExpiresAt;
   if (!raw) return false;
   return new Date(raw + 'T00:00:00') < new Date(new Date().toDateString());
+}
+
+/* ---- Shared: build + persist a job from plain fields ---- */
+const ALL_SERVICES = ['Acknowledgment','Jurat','Loan Signing','Power of Attorney','Apostille','Real Estate','Wedding Officiation','General','Other'];
+
+function createAndPersistJob(fields, opts = {}) {
+  const services = Array.isArray(fields.services) ? fields.services : (fields.service ? [fields.service] : ['General']);
+  const job = {
+    id: uid('j'),
+    customerName: fields.customerName || STATE.currentUser.name || 'Customer',
+    customerEmail: fields.customerEmail || STATE.currentUser.email || '',
+    services,
+    serviceType: services[0] || '',
+    signatures: +fields.signatures || 1,
+    notaryPreference: fields.notaryPreference || 'Mobile',
+    location: fields.location || '',
+    locationLat: fields.locationLat ?? null,
+    locationLng: fields.locationLng ?? null,
+    dateTime: fields.dateTime || '',
+    notes: fields.notes || '',
+    startingPrice: +fields.startingPrice || calculateSuggestedPrice(services, +fields.signatures || 1, fields.notaryPreference || 'Mobile'),
+    suggestedPrice: calculateSuggestedPrice(services, +fields.signatures || 1, fields.notaryPreference || 'Mobile'),
+    status: 'open',
+    acceptedBidId: null,
+    postedAt: Date.now(),
+    isUserJob: true
+  };
+  if (fields.groupId) job.groupId = fields.groupId;
+  STATE.jobs.push(job);
+  saveState();
+  if (sb && sbUser) { sbSaveJob(job).catch(err => console.warn('[Supabase] bulk job save:', err)); }
+  else { sbSaveJob(job).catch(() => {}); }
+  if (!opts.skipSeed) seedBidsForUserJob(job);
+  return job;
+}
+
+/* ---- 74: Bulk job posting ---- */
+const BULK_MAX = 10;
+function bulkRowHtml(i) {
+  return `
+    <div class="bulk-row" data-row="${i}">
+      <div class="bulk-row-head">Job ${i + 1}${i > 0 ? ` <button class="bulk-remove" onclick="bulkRemoveRow(${i})" title="Remove">&#x2715;</button>` : ''}</div>
+      <div class="bulk-grid">
+        <select class="field-input bk-service">${ALL_SERVICES.map(s => `<option>${s}</option>`).join('')}</select>
+        <input class="field-input bk-signatures" type="number" min="1" value="1" placeholder="Signatures">
+        <input class="field-input bk-location" type="text" placeholder="City / ZIP">
+        <input class="field-input bk-datetime" type="datetime-local">
+        <input class="field-input bk-price" type="number" min="1" placeholder="Max price $">
+      </div>
+    </div>`;
+}
+function bulkRenderRows(n) {
+  const wrap = document.getElementById('bulk-rows');
+  if (!wrap) return;
+  wrap.innerHTML = Array.from({ length: n }, (_, i) => bulkRowHtml(i)).join('');
+  document.getElementById('bulk-add').style.display = n >= BULK_MAX ? 'none' : '';
+}
+function bulkCurrentCount() { return document.querySelectorAll('#bulk-rows .bulk-row').length; }
+function bulkAddRow() {
+  const n = bulkCurrentCount();
+  if (n >= BULK_MAX) return;
+  bulkRenderRows(n + 1);
+}
+function bulkRemoveRow() {
+  // Re-collect remaining values then re-render with one fewer row.
+  const rows = collectBulkRows();
+  rows.splice(arguments[0], 1);
+  bulkRenderRows(Math.max(1, rows.length));
+  // restore values
+  document.querySelectorAll('#bulk-rows .bulk-row').forEach((el, i) => {
+    if (!rows[i]) return;
+    el.querySelector('.bk-service').value = rows[i].service;
+    el.querySelector('.bk-signatures').value = rows[i].signatures;
+    el.querySelector('.bk-location').value = rows[i].location;
+    el.querySelector('.bk-datetime').value = rows[i].dateTime;
+    el.querySelector('.bk-price').value = rows[i].startingPrice;
+  });
+}
+function collectBulkRows() {
+  return [...document.querySelectorAll('#bulk-rows .bulk-row')].map(el => ({
+    service: el.querySelector('.bk-service').value,
+    signatures: el.querySelector('.bk-signatures').value,
+    location: el.querySelector('.bk-location').value.trim(),
+    dateTime: el.querySelector('.bk-datetime').value,
+    startingPrice: el.querySelector('.bk-price').value
+  }));
+}
+async function submitBulkJobs() {
+  const rows = collectBulkRows().filter(r => r.location && r.dateTime);
+  const prog = document.getElementById('bulk-progress');
+  if (rows.length === 0) { prog.textContent = 'Fill in at least one job (location + date).'; prog.className = 'bulk-progress error'; return; }
+  const btn = document.getElementById('bulk-submit');
+  setLoading(btn, true);
+  prog.className = 'bulk-progress';
+  prog.textContent = `Posting ${rows.length} job${rows.length !== 1 ? 's' : ''}…`;
+  rows.forEach(r => createAndPersistJob(r));
+  setLoading(btn, false);
+  toast(`Posted ${rows.length} job${rows.length !== 1 ? 's' : ''}.`);
+  goTo('my-job');
 }
 
 /* ---- 73: Bid expiration timer ---- */
