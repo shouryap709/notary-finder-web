@@ -1,0 +1,125 @@
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../App';
+import Button from '../components/Button';
+import { theme, FONT } from '../theme';
+import { fetchMyProfile, updateMyProfile, NotaryProfile } from '../lib/supabase';
+
+const SERVICES = ['Acknowledgment', 'Jurat', 'Loan Signing', 'Power of Attorney', 'Apostille', 'Real Estate'];
+
+type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
+
+function Field({ label, value, onChange, ...rest }: any) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput style={styles.input} value={value} onChangeText={onChange} placeholderTextColor={theme.colors.muted} {...rest} />
+    </View>
+  );
+}
+
+export default function ProfileScreen({ navigation }: Props) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState('');
+  const [business, setBusiness] = useState('');
+  const [phone, setPhone] = useState('');
+  const [license, setLicense] = useState('');
+  const [state, setState] = useState('');
+  const [address, setAddress] = useState('');
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
+  const [services, setServices] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchMyProfile().then((p: NotaryProfile | null) => {
+      if (p) {
+        setName(p.full_name || ''); setBusiness(p.business_name || ''); setPhone(p.phone || '');
+        setLicense(p.license_number || ''); setState(p.state || ''); setAddress(p.home_address || '');
+        setLat(p.home_lat ?? null); setLng(p.home_lng ?? null); setServices(p.services || []);
+      }
+    }).finally(() => setLoading(false));
+  }, []);
+
+  function toggleService(s: string) {
+    setServices(prev => (prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]));
+  }
+
+  function useCurrentLocation() {
+    const geo = (global as any).navigator?.geolocation;
+    if (!geo) { Alert.alert('Location unavailable', 'Enter your address manually.'); return; }
+    geo.getCurrentPosition(
+      (pos: any) => { setLat(pos.coords.latitude); setLng(pos.coords.longitude); Alert.alert('Location set', 'Using your current location.'); },
+      () => Alert.alert('Location error', 'Could not get your location.'),
+      { enableHighAccuracy: false, timeout: 10000 },
+    );
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await updateMyProfile({
+        full_name: name.trim(), business_name: business.trim(), phone: phone.trim(),
+        license_number: license.trim(), state: state.trim(), services,
+        home_address: address.trim(), home_lat: lat, home_lng: lng,
+      });
+      Alert.alert('Saved', 'Your profile has been updated.');
+      navigation.goBack();
+    } catch (e: any) {
+      Alert.alert('Save failed', e?.message || 'Please try again.');
+    } finally { setSaving(false); }
+  }
+
+  if (loading) {
+    return <SafeAreaView style={[styles.safe, styles.center]} edges={['bottom']}><ActivityIndicator color={theme.colors.primary} /></SafeAreaView>;
+  }
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <ScrollView contentContainerStyle={styles.body}>
+        <Field label="Full name" value={name} onChange={setName} autoCapitalize="words" />
+        <Field label="Business name" value={business} onChange={setBusiness} autoCapitalize="words" />
+        <Field label="Phone" value={phone} onChange={setPhone} keyboardType="phone-pad" />
+        <Field label="License / commission #" value={license} onChange={setLicense} />
+        <Field label="State" value={state} onChange={setState} autoCapitalize="characters" maxLength={2} />
+
+        <Text style={styles.label}>Services offered</Text>
+        <View style={styles.grid}>
+          {SERVICES.map(s => (
+            <TouchableOpacity key={s} style={[styles.chip, services.includes(s) && styles.chipOn]} onPress={() => toggleService(s)}>
+              <Text style={[styles.chipText, services.includes(s) && styles.chipTextOn]}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Home / office address</Text>
+          <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder="123 Main St, San Jose, CA" placeholderTextColor={theme.colors.muted} />
+          <TouchableOpacity style={styles.locBtn} onPress={useCurrentLocation}>
+            <Text style={styles.locBtnText}>📍 Use current location{lat != null ? ` (${lat.toFixed(3)}, ${lng?.toFixed(3)})` : ''}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Button title={saving ? 'Saving…' : 'Save profile'} onPress={save} disabled={saving} style={{ marginTop: 12 }} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: theme.colors.bg },
+  center: { justifyContent: 'center', alignItems: 'center' },
+  body: { padding: 22 },
+  field: { marginBottom: 14 },
+  label: { fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5, color: theme.colors.muted, fontWeight: '600', marginBottom: 6, fontFamily: FONT },
+  input: { borderWidth: 1, borderColor: theme.colors.line, borderRadius: theme.radius.sm, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14, color: theme.colors.text, fontFamily: FONT },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 16 },
+  chip: { borderWidth: 1, borderColor: theme.colors.line, borderRadius: 20, paddingVertical: 7, paddingHorizontal: 13 },
+  chipOn: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  chipText: { fontSize: 11, color: theme.colors.text, fontFamily: FONT },
+  chipTextOn: { color: theme.colors.primaryText },
+  locBtn: { marginTop: 8, paddingVertical: 8 },
+  locBtnText: { fontSize: 11, color: theme.colors.accent, fontWeight: '600', fontFamily: FONT },
+});

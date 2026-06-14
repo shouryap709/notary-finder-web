@@ -1,0 +1,17 @@
+node_modules/
+npm-debug.log
+yarn-error.log
+.metro-health-check*
+ios/Pods/
+ios/build/
+*.xcworkspace
+!default.xcworkspace
+android/.gradle/
+android/build/
+android/app/build/
+*.keystore
+!debug.keystore
+.DS_Store
+*.log
+.env
+coverage/
