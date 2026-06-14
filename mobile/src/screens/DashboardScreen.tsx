@@ -24,8 +24,8 @@ export default function DashboardScreen({ navigation }: Props) {
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-          <Text style={styles.headerLink}>Profile</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
+          <Text style={styles.headerLink}>Settings</Text>
         </TouchableOpacity>
       ),
     });
