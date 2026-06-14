@@ -1256,6 +1256,19 @@
   /* ---- 77: Holidays ---- */
   .holiday-note { margin-top: 8px; padding: 8px 11px; background: #fff8e1; border: 1px solid #f3e0a3; border-radius: 7px; font-size: 9.5px; color: #8a6d1f; line-height: 1.5; }
   .holiday-tag { background: #fdecea !important; color: #b3261e !important; }
+
+  /* ---- 78: NPS survey ---- */
+  .nps-card { border: 1px solid #ececec; border-radius: 12px; padding: 16px; margin-bottom: 16px; background: #fafafa; }
+  .nps-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .nps-q { font-size: 12px; font-weight: 600; color: #111; }
+  .nps-skip { border: none; background: none; color: #aaa; font-size: 10px; cursor: pointer; }
+  .nps-skip:hover { color: #000; }
+  .nps-scale { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0 4px; }
+  .nps-num { flex: 1; min-width: 24px; border: 1px solid #e2e2e2; background: #fff; border-radius: 6px; padding: 6px 0; font-size: 11px; cursor: pointer; transition: all .12s; }
+  .nps-num:hover { border-color: #999; }
+  .nps-num.on { background: #000; color: #fff; border-color: #000; }
+  .nps-scale-labels { display: flex; justify-content: space-between; font-size: 8.5px; color: #bbb; margin-bottom: 10px; }
+  .nps-comment { width: 100%; border: 1px solid #e2e2e2; border-radius: 8px; padding: 8px 10px; font-size: 11px; min-height: 52px; resize: vertical; margin-bottom: 10px; font-family: inherit; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -2915,7 +2928,7 @@ function renderMyJob(opts = {}) {
       ? renderConfirmedCard(acceptedBid, job)
       : renderLiveBids(bids, job, opts.newBidId || null);
 
-  root.innerHTML = statusBanner + summaryHTML + bidsSection;
+  root.innerHTML = npsSurveyHtml() + statusBanner + summaryHTML + bidsSection;
 }
 
 function renderLiveBids(bids, job, newBidId = null) {
@@ -3842,6 +3855,57 @@ function createAndPersistJob(fields, opts = {}) {
   else { sbSaveJob(job).catch(() => {}); }
   if (!opts.skipSeed) seedBidsForUserJob(job);
   return job;
+}
+
+/* ---- 78: NPS survey ---- */
+let npsScore = null;
+function completedUserJobCount() {
+  return STATE.jobs.filter(j => j.isUserJob && j.status === 'completed').length;
+}
+function npsShouldShow() {
+  const n = completedUserJobCount();
+  if (n === 0 || n % 3 !== 0) return false;
+  let last = 0;
+  try { last = +localStorage.getItem('npsLastSeen') || 0; } catch (e) {}
+  if (Date.now() - last < 90 * 24 * 60 * 60 * 1000) return false;
+  return true;
+}
+function npsSurveyHtml() {
+  if (!npsShouldShow()) return '';
+  const buttons = Array.from({ length: 11 }, (_, i) =>
+    `<button class="nps-num" data-score="${i}" onclick="npsPick(${i})">${i}</button>`).join('');
+  return `
+    <div class="nps-card" id="nps-card">
+      <div class="nps-head">
+        <div class="nps-q">How likely are you to recommend NotaryFinder?</div>
+        <button class="nps-skip" onclick="npsSkip()">Skip</button>
+      </div>
+      <div class="nps-scale">${buttons}</div>
+      <div class="nps-scale-labels"><span>Not likely</span><span>Very likely</span></div>
+      <textarea class="nps-comment" id="nps-comment" placeholder="What's the main reason for your score? (optional)"></textarea>
+      <button class="btn btn-primary btn-sm" onclick="npsSubmit()">Submit</button>
+    </div>`;
+}
+function npsPick(score) {
+  npsScore = score;
+  document.querySelectorAll('.nps-num').forEach(b => b.classList.toggle('on', +b.dataset.score === score));
+}
+function npsDone() {
+  try { localStorage.setItem('npsLastSeen', String(Date.now())); } catch (e) {}
+  const card = document.getElementById('nps-card');
+  if (card) card.remove();
+  npsScore = null;
+}
+function npsSkip() { npsDone(); }
+async function npsSubmit() {
+  if (npsScore === null) { toast('Pick a score from 0 to 10.'); return; }
+  const comment = document.getElementById('nps-comment')?.value.trim() || null;
+  if (sb && sbUser) {
+    try { await sb.from('nps_responses').insert({ user_id: sbUser.id, score: npsScore, comment }); }
+    catch (e) { console.warn('[Supabase] nps insert:', e); }
+  }
+  npsDone();
+  toast('Thanks for your feedback!');
 }
 
 /* ---- 77: US federal holiday auto-block ---- */
