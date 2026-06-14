@@ -1280,6 +1280,16 @@
 
   /* ---- 80: Backup / featured ---- */
   .urgent-tag { background: #111 !important; color: #ffd23f !important; }
+
+  /* ---- 81: Doc templates ---- */
+  .doc-templates { margin-bottom: 18px; }
+  .doc-templates-label { font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 9px; display: flex; align-items: center; gap: 8px; }
+  .doc-templates-hint { font-size: 8px; color: #bbb; background: #f3f3f3; border-radius: 20px; padding: 2px 7px; letter-spacing: 0; text-transform: none; font-weight: 500; }
+  .doc-templates-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+  .doc-tpl { display: flex; flex-direction: column; gap: 2px; text-align: left; border: 1px solid #e6e6e6; background: #fff; border-radius: 9px; padding: 9px 11px; cursor: pointer; transition: border-color .14s; }
+  .doc-tpl:hover { border-color: #000; }
+  .doc-tpl-title { font-size: 11px; font-weight: 600; color: #111; }
+  .doc-tpl-hint { font-size: 8.5px; color: #999; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1382,6 +1392,11 @@
     <div class="form-shell">
       <div class="page-title">Post a job</div>
       <div class="page-subtitle">Five quick steps. We'll send your job to nearby notaries the moment you submit.</div>
+
+      <div class="doc-templates" id="doc-templates">
+        <div class="doc-templates-label">Pick a document type <span class="doc-templates-hint">Powered by templates</span></div>
+        <div class="doc-templates-grid" id="doc-templates-grid"></div>
+      </div>
 
       <!-- Stepper -->
       <div class="stepper" id="stepper">
@@ -2451,7 +2466,7 @@ function goTo(pageId) {
   if (pageId === 'my-job') renderMyJob();
   if (pageId === 'notary-dashboard') { renderCommissionBanner(); renderDashboard(); renderNotaryHeaderPill(); }
   if (pageId === 'my-bids') { renderMyBids(); renderNotaryHeaderPill(); }
-  if (pageId === 'post-job') resetPostJobForm();
+  if (pageId === 'post-job') { resetPostJobForm(); renderDocTemplates(); }
   if (pageId === 'bulk-post') { bulkRenderRows(1); document.getElementById('bulk-progress').textContent = ''; }
 
   // Realtime lifecycle — subscribe for live updates.
@@ -3517,6 +3532,42 @@ function renderMyBidsList() {
       </div>
     `;
   }).join('');
+}
+
+/* ---- 81: Document type templates ---- */
+const DOC_TEMPLATES = [
+  { key: 'poa',     title: 'Power of Attorney',   service: 'Power of Attorney', signatures: 1, pref: 'Mobile',    hint: 'Loan Signing notary suggested' },
+  { key: 'realest', title: 'Real Estate Closing', service: 'Real Estate',       signatures: 4, pref: 'Mobile',    hint: 'Mobile recommended' },
+  { key: 'apost',   title: 'Apostille',           service: 'Apostille',         signatures: 1, pref: 'Either',    hint: 'International use' },
+  { key: 'wedding', title: 'Wedding Officiation', service: 'Wedding Officiation', signatures: 2, pref: 'Mobile',  hint: 'On-site ceremony' },
+  { key: 'affid',   title: 'Affidavit',           service: 'General',           signatures: 1, pref: 'Either',    hint: 'Sworn statement' },
+  { key: 'w9',      title: 'W-9 / Tax Document',  service: 'General',           signatures: 1, pref: 'Either',    hint: 'Tax paperwork' },
+  { key: 'custom',  title: 'Custom',              service: null,                signatures: 1, pref: 'Mobile',    hint: 'Blank form' }
+];
+function renderDocTemplates() {
+  const grid = document.getElementById('doc-templates-grid');
+  if (!grid) return;
+  grid.innerHTML = DOC_TEMPLATES.map(t =>
+    `<button type="button" class="doc-tpl" onclick="applyDocTemplate('${t.key}')">
+       <span class="doc-tpl-title">${t.title}</span>
+       <span class="doc-tpl-hint">${t.hint}</span>
+     </button>`).join('');
+}
+function applyDocTemplate(key) {
+  const t = DOC_TEMPLATES.find(x => x.key === key);
+  if (!t) return;
+  selectedServices.clear();
+  if (t.service) selectedServices.add(t.service);
+  $servicesGrid.querySelectorAll('.svc-pill').forEach(p =>
+    p.classList.toggle('on', selectedServices.has(p.dataset.svc)));
+  $signatures.value = t.signatures;
+  // Preference pills
+  currentPref = t.pref;
+  $prefGroup.querySelectorAll('.radio-pill').forEach(p => p.classList.toggle('on', p.dataset.val === t.pref));
+  userTouchedPrice = false;
+  updateServicesCount();
+  updateSuggested();
+  toast(t.service ? `${t.title} template applied` : 'Blank form ready');
 }
 
 /* ---- 80: Backup notary system ---- */
