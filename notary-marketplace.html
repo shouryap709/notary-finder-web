@@ -1230,6 +1230,9 @@
   .cm-banner { margin-bottom: 14px; padding: 10px 13px; border-radius: 8px; font-size: 10px; line-height: 1.5; }
   .cm-banner.yellow { background: #fff8e1; border: 1px solid #f3e0a3; color: #8a6d1f; }
   .cm-banner.red    { background: #fdecea; border: 1px solid #f5c2bd; color: #b3261e; }
+
+  /* ---- 73: Bid expiry chip ---- */
+  .bid-expiry { color: #c08a1f; font-weight: 600; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -2878,7 +2881,7 @@ function renderLiveBids(bids, job, newBidId = null) {
             <span class="rval">${bid.notaryRating}</span>
             <span class="rcnt">(${bid.notaryReviews} reviews)</span>
           </div>
-          <div class="bid-meta">${bid.distance} away · bid ${formatTimeAgo(bid.placedAt)}</div>
+          <div class="bid-meta">${bid.distance} away · bid ${formatTimeAgo(bid.placedAt)} · <span class="bid-expiry" data-expires="${bidExpiresAt(bid)}">${bidCountdownLabel(bid)}</span></div>
         </div>
         <div class="bid-price-block">
           <div class="bid-price">$${bid.price}</div>
@@ -3741,6 +3744,40 @@ function commissionExpired() {
   if (!raw) return false;
   return new Date(raw + 'T00:00:00') < new Date(new Date().toDateString());
 }
+
+/* ---- 73: Bid expiration timer ---- */
+const BID_TTL_MS = 24 * 60 * 60 * 1000;
+function bidExpiresAt(bid) {
+  return (bid.expiresAt ? new Date(bid.expiresAt).getTime() : (bid.placedAt + BID_TTL_MS));
+}
+function bidCountdownLabel(bid) {
+  const ms = bidExpiresAt(bid) - Date.now();
+  if (ms <= 0) return 'expired';
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  return `Expires in ${h}h ${m}m`;
+}
+/* Auto-mark pending bids past their TTL as lost (client-side mirror of the cron). */
+function expireStaleBidsLocal() {
+  let changed = false;
+  STATE.bids.forEach(b => {
+    if (b.status === 'pending' && bidExpiresAt(b) <= Date.now()) { b.status = 'lost'; changed = true; }
+  });
+  if (changed) { saveState(); }
+  return changed;
+}
+/* Tick countdown labels every 30s; re-render if any expired. */
+setInterval(() => {
+  const expired = expireStaleBidsLocal();
+  if (expired && document.getElementById('my-job')?.classList.contains('active')) { renderMyJob(); return; }
+  document.querySelectorAll('.bid-expiry').forEach(el => {
+    const exp = Number(el.dataset.expires);
+    const ms = exp - Date.now();
+    if (ms <= 0) { el.textContent = 'expired'; return; }
+    const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+    el.textContent = `Expires in ${h}h ${m}m`;
+  });
+}, 30000);
 
 /* ---- Stubs filled in by features 76 (business hours) & 85 (service area) ---- */
 function nsBusinessHoursHtml() { return ''; }
