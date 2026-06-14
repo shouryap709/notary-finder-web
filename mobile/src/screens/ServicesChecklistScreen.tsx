@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
 import { RootStackParamList } from '../../App';
 import Button from '../components/Button';
 import { FONT } from '../theme';
@@ -13,6 +14,7 @@ const SERVICES = ['Acknowledgment', 'Jurat', 'Loan Signing', 'Power of Attorney'
 type Props = NativeStackScreenProps<RootStackParamList, 'ServicesChecklist'>;
 
 export default function ServicesChecklistScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -28,8 +30,8 @@ export default function ServicesChecklistScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.body}>
-        <Text style={styles.title}>What services do you offer?</Text>
-        <Text style={styles.sub}>Pick the notarial services you handle.</Text>
+        <Text style={styles.title}>{t('services.title')}</Text>
+        <Text style={styles.sub}>{t('services.sub')}</Text>
         <View style={styles.grid}>
           {SERVICES.map(s => (
             <TouchableOpacity key={s} style={[styles.chip, selected.includes(s) && styles.chipOn]} onPress={() => toggle(s)}>
@@ -37,7 +39,7 @@ export default function ServicesChecklistScreen({ navigation }: Props) {
             </TouchableOpacity>
           ))}
         </View>
-        <Button title="Continue to dashboard" onPress={save} style={styles.btn} />
+        <Button title={t('services.continue')} onPress={save} style={styles.btn} />
       </View>
     </SafeAreaView>
   );

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, Alert } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { launchCamera } from 'react-native-image-picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
 import { RootStackParamList } from '../../App';
 import Button from '../components/Button';
 import { FONT } from '../theme';
@@ -12,6 +13,7 @@ import { fetchJob, Job, supabase, uploadProofPhoto } from '../lib/supabase';
 type Props = NativeStackScreenProps<RootStackParamList, 'JobDetail'>;
 
 export default function JobDetailScreen({ navigation, route }: Props) {
+  const { t } = useTranslation();
   const { colors, radius } = useTheme();
   const styles = useMemo(() => makeStyles(colors, radius), [colors, radius]);
   const { jobId } = route.params;
@@ -58,34 +60,34 @@ export default function JobDetailScreen({ navigation, route }: Props) {
     return <SafeAreaView style={[styles.safe, styles.center]} edges={['bottom']}><ActivityIndicator color={colors.primary} /></SafeAreaView>;
   }
   if (!job) {
-    return <SafeAreaView style={[styles.safe, styles.center]} edges={['bottom']}><Text style={styles.muted}>Job not found.</Text></SafeAreaView>;
+    return <SafeAreaView style={[styles.safe, styles.center]} edges={['bottom']}><Text style={styles.muted}>{t('job.notFound')}</Text></SafeAreaView>;
   }
 
   const service = job.services?.length ? job.services.join(', ') : job.service_type || 'Notary job';
-  const when = job.date_time ? new Date(job.date_time).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Flexible';
+  const when = job.date_time ? new Date(job.date_time).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : t('job.flexible');
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.title}>{service}</Text>
-        <Row label="When" value={when} />
-        <Row label="Location" value={job.location_address} />
-        <Row label="Preference" value={job.notary_preference} />
-        <Row label="Signatures" value={job.signatures} />
-        <Row label="Customer max" value={job.starting_price != null ? `$${job.starting_price}` : null} />
-        <Row label="Notes" value={job.notes} />
+        <Row label={t('job.when')} value={when} />
+        <Row label={t('job.location')} value={job.location_address} />
+        <Row label={t('job.preference')} value={job.notary_preference} />
+        <Row label={t('job.signatures')} value={job.signatures} />
+        <Row label={t('job.customerMax')} value={job.starting_price != null ? `$${job.starting_price}` : null} />
+        <Row label={t('job.notes')} value={job.notes} />
         {proofUrl && (
           <>
-            <Text style={[styles.label, { marginTop: 16 }]}>Proof photo</Text>
+            <Text style={[styles.label, { marginTop: 16 }]}>{t('job.proofPhoto')}</Text>
             <Image source={{ uri: proofUrl }} style={styles.proof} resizeMode="cover" />
           </>
         )}
         {job.status === 'completed' && (
-          <Button title={uploading ? 'Uploading…' : proofUrl ? 'Replace proof photo' : 'Add proof photo'} variant="secondary" disabled={uploading} onPress={addProofPhoto} style={{ marginTop: 16 }} />
+          <Button title={uploading ? t('job.uploading') : proofUrl ? t('job.replaceProof') : t('job.addProof')} variant="secondary" disabled={uploading} onPress={addProofPhoto} style={{ marginTop: 16 }} />
         )}
       </ScrollView>
       <View style={styles.footer}>
-        <Button title="Place Bid" onPress={() => navigation.navigate('BidPlacement', { jobId: job.id })} />
+        <Button title={t('job.placeBid')} onPress={() => navigation.navigate('BidPlacement', { jobId: job.id })} />
       </View>
     </SafeAreaView>
   );

@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch, Linking, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
 import { RootStackParamList } from '../../App';
 import { FONT } from '../theme';
 import { useTheme } from '../ThemeContext';
+import { setLanguage } from '../i18n';
 import { signOut, fetchMyProfile, updateMyProfile } from '../lib/supabase';
 import pkg from '../../package.json';
 
@@ -14,9 +16,11 @@ const PRIVACY_URL = 'https://notaryfinder.com/privacy';
 const FAQ_URL = 'https://notaryfinder.com/faq';
 
 export default function SettingsScreen({ navigation }: Props) {
+  const { t, i18n } = useTranslation();
   const { colors, mode, toggleMode } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [notif, setNotif] = useState(true);
+  const isEs = i18n.language?.startsWith('es');
 
   useEffect(() => {
     fetchMyProfile().then(p => { if (p?.notifications_enabled != null) setNotif(!!p.notifications_enabled); });
@@ -45,20 +49,21 @@ export default function SettingsScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.section}>Account</Text>
-        <Row label="Edit profile" onPress={() => navigation.navigate('Profile')} />
+        <Text style={styles.section}>{t('settings.account')}</Text>
+        <Row label={t('settings.editProfile')} onPress={() => navigation.navigate('Profile')} />
 
-        <Text style={styles.section}>Preferences</Text>
-        <Row label="Push notifications" right={<Switch value={notif} onValueChange={toggleNotif} />} />
-        <Row label="Dark mode" right={<Switch value={mode === 'dark'} onValueChange={toggleMode} />} />
+        <Text style={styles.section}>{t('settings.preferences')}</Text>
+        <Row label={t('settings.pushNotifications')} right={<Switch value={notif} onValueChange={toggleNotif} />} />
+        <Row label={t('settings.darkMode')} right={<Switch value={mode === 'dark'} onValueChange={toggleMode} />} />
+        <Row label={t('settings.language')} value={isEs ? 'Español' : 'English'} onPress={() => setLanguage(isEs ? 'en' : 'es')} />
 
-        <Text style={styles.section}>About</Text>
-        <Row label="Privacy policy" onPress={() => Linking.openURL(PRIVACY_URL)} />
-        <Row label="Help & FAQ" onPress={() => Linking.openURL(FAQ_URL)} />
-        <Row label="Version" value={pkg.version} />
+        <Text style={styles.section}>{t('settings.about')}</Text>
+        <Row label={t('settings.privacy')} onPress={() => Linking.openURL(PRIVACY_URL)} />
+        <Row label={t('settings.help')} onPress={() => Linking.openURL(FAQ_URL)} />
+        <Row label={t('settings.version')} value={pkg.version} />
 
         <TouchableOpacity style={styles.signOut} onPress={handleSignOut}>
-          <Text style={styles.signOutText}>Sign out</Text>
+          <Text style={styles.signOutText}>{t('settings.signOut')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

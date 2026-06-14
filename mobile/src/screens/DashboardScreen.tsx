@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
 import { RootStackParamList } from '../../App';
 import JobCard from '../components/JobCard';
 import { FONT } from '../theme';
@@ -11,6 +12,7 @@ import { fetchOpenJobs, Job } from '../lib/supabase';
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
 export default function DashboardScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -26,13 +28,14 @@ export default function DashboardScreen({ navigation }: Props) {
 
   useEffect(() => {
     navigation.setOptions({
+      title: t('dashboard.title'),
       headerRight: () => (
         <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-          <Text style={styles.headerLink}>Settings</Text>
+          <Text style={styles.headerLink}>{t('common.settings')}</Text>
         </TouchableOpacity>
       ),
     });
-  }, [navigation, styles]);
+  }, [navigation, styles, t]);
 
   if (loading) {
     return <SafeAreaView style={[styles.safe, styles.center]} edges={['bottom']}><ActivityIndicator color={colors.primary} /></SafeAreaView>;
@@ -45,7 +48,7 @@ export default function DashboardScreen({ navigation }: Props) {
         keyExtractor={i => i.id}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.muted} />}
-        ListEmptyComponent={<Text style={styles.empty}>No open jobs right now. Pull to refresh.</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>{t('dashboard.empty')}</Text>}
         renderItem={({ item }) => (
           <JobCard job={item}
             onPress={() => navigation.navigate('JobDetail', { jobId: item.id })}

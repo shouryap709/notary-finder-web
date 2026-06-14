@@ -1,0 +1,80 @@
+{
+  "common": { "settings": "Settings", "profile": "Profile", "continue": "Continue" },
+  "auth": {
+    "signInTitle": "Notary sign in",
+    "signUpTitle": "Create your notary profile",
+    "fullName": "Full name",
+    "email": "Email",
+    "password": "Password",
+    "signUp": "Sign up",
+    "signIn": "Sign in",
+    "pleaseWait": "Please wait…",
+    "toSignUp": "New here? Create a profile",
+    "toSignIn": "Already have an account? Sign in",
+    "missingInfo": "Missing info",
+    "fillAll": "Please fill in all fields.",
+    "checkEmail": "Check your email",
+    "failed": "Sign in failed",
+    "tryAgain": "Please try again."
+  },
+  "services": {
+    "title": "What services do you offer?",
+    "sub": "Pick the notarial services you handle.",
+    "continue": "Continue to dashboard"
+  },
+  "dashboard": {
+    "empty": "No open jobs right now. Pull to refresh.",
+    "title": "Open jobs"
+  },
+  "job": {
+    "title": "Job details",
+    "when": "When",
+    "location": "Location",
+    "preference": "Preference",
+    "signatures": "Signatures",
+    "customerMax": "Customer max",
+    "notes": "Notes",
+    "notFound": "Job not found.",
+    "placeBid": "Place Bid",
+    "proofPhoto": "Proof photo",
+    "addProof": "Add proof photo",
+    "replaceProof": "Replace proof photo",
+    "uploading": "Uploading…",
+    "flexible": "Flexible"
+  },
+  "bid": {
+    "title": "Place a bid",
+    "priceLabel": "Your bid (USD)",
+    "messageLabel": "Message to customer (optional)",
+    "submit": "Submit bid",
+    "submitting": "Submitting…",
+    "placed": "Bid placed",
+    "enterPrice": "Enter a price",
+    "validAmount": "Please enter a valid bid amount."
+  },
+  "profile": {
+    "fullName": "Full name",
+    "businessName": "Business name",
+    "phone": "Phone",
+    "license": "License / commission #",
+    "state": "State",
+    "servicesOffered": "Services offered",
+    "homeAddress": "Home / office address",
+    "useLocation": "Use current location",
+    "save": "Save profile",
+    "saving": "Saving…"
+  },
+  "settings": {
+    "account": "Account",
+    "editProfile": "Edit profile",
+    "preferences": "Preferences",
+    "pushNotifications": "Push notifications",
+    "darkMode": "Dark mode",
+    "language": "Language",
+    "about": "About",
+    "privacy": "Privacy policy",
+    "help": "Help & FAQ",
+    "version": "Version",
+    "signOut": "Sign out"
+  }
+}

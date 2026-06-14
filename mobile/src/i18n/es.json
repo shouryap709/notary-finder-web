@@ -1,0 +1,80 @@
+{
+  "common": { "settings": "Ajustes", "profile": "Perfil", "continue": "Continuar" },
+  "auth": {
+    "signInTitle": "Iniciar sesión de notario",
+    "signUpTitle": "Crea tu perfil de notario",
+    "fullName": "Nombre completo",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "signUp": "Registrarse",
+    "signIn": "Iniciar sesión",
+    "pleaseWait": "Espera…",
+    "toSignUp": "¿Nuevo aquí? Crea un perfil",
+    "toSignIn": "¿Ya tienes cuenta? Inicia sesión",
+    "missingInfo": "Falta información",
+    "fillAll": "Por favor completa todos los campos.",
+    "checkEmail": "Revisa tu correo",
+    "failed": "Error al iniciar sesión",
+    "tryAgain": "Inténtalo de nuevo."
+  },
+  "services": {
+    "title": "¿Qué servicios ofreces?",
+    "sub": "Elige los servicios notariales que manejas.",
+    "continue": "Continuar al panel"
+  },
+  "dashboard": {
+    "empty": "No hay trabajos abiertos ahora. Desliza para actualizar.",
+    "title": "Trabajos abiertos"
+  },
+  "job": {
+    "title": "Detalles del trabajo",
+    "when": "Cuándo",
+    "location": "Ubicación",
+    "preference": "Preferencia",
+    "signatures": "Firmas",
+    "customerMax": "Máximo del cliente",
+    "notes": "Notas",
+    "notFound": "Trabajo no encontrado.",
+    "placeBid": "Hacer oferta",
+    "proofPhoto": "Foto de prueba",
+    "addProof": "Agregar foto de prueba",
+    "replaceProof": "Reemplazar foto de prueba",
+    "uploading": "Subiendo…",
+    "flexible": "Flexible"
+  },
+  "bid": {
+    "title": "Hacer una oferta",
+    "priceLabel": "Tu oferta (USD)",
+    "messageLabel": "Mensaje al cliente (opcional)",
+    "submit": "Enviar oferta",
+    "submitting": "Enviando…",
+    "placed": "Oferta enviada",
+    "enterPrice": "Ingresa un precio",
+    "validAmount": "Por favor ingresa un monto válido."
+  },
+  "profile": {
+    "fullName": "Nombre completo",
+    "businessName": "Nombre del negocio",
+    "phone": "Teléfono",
+    "license": "Licencia / comisión #",
+    "state": "Estado",
+    "servicesOffered": "Servicios ofrecidos",
+    "homeAddress": "Dirección de casa / oficina",
+    "useLocation": "Usar ubicación actual",
+    "save": "Guardar perfil",
+    "saving": "Guardando…"
+  },
+  "settings": {
+    "account": "Cuenta",
+    "editProfile": "Editar perfil",
+    "preferences": "Preferencias",
+    "pushNotifications": "Notificaciones push",
+    "darkMode": "Modo oscuro",
+    "language": "Idioma",
+    "about": "Acerca de",
+    "privacy": "Política de privacidad",
+    "help": "Ayuda y preguntas",
+    "version": "Versión",
+    "signOut": "Cerrar sesión"
+  }
+}

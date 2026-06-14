@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
 import { RootStackParamList } from '../../App';
 import Button from '../components/Button';
 import { FONT } from '../theme';
@@ -13,6 +14,7 @@ const SERVICES = ['Acknowledgment', 'Jurat', 'Loan Signing', 'Power of Attorney'
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
 export default function ProfileScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const { colors, radius } = useTheme();
   const styles = useMemo(() => makeStyles(colors, radius), [colors, radius]);
   const [loading, setLoading] = useState(true);
@@ -80,13 +82,13 @@ export default function ProfileScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.body}>
-        <Field label="Full name" value={name} onChange={setName} inputProps={{ autoCapitalize: 'words' }} />
-        <Field label="Business name" value={business} onChange={setBusiness} inputProps={{ autoCapitalize: 'words' }} />
-        <Field label="Phone" value={phone} onChange={setPhone} inputProps={{ keyboardType: 'phone-pad' }} />
-        <Field label="License / commission #" value={license} onChange={setLicense} />
-        <Field label="State" value={state} onChange={setState} inputProps={{ autoCapitalize: 'characters', maxLength: 2 }} />
+        <Field label={t('profile.fullName')} value={name} onChange={setName} inputProps={{ autoCapitalize: 'words' }} />
+        <Field label={t('profile.businessName')} value={business} onChange={setBusiness} inputProps={{ autoCapitalize: 'words' }} />
+        <Field label={t('profile.phone')} value={phone} onChange={setPhone} inputProps={{ keyboardType: 'phone-pad' }} />
+        <Field label={t('profile.license')} value={license} onChange={setLicense} />
+        <Field label={t('profile.state')} value={state} onChange={setState} inputProps={{ autoCapitalize: 'characters', maxLength: 2 }} />
 
-        <Text style={styles.label}>Services offered</Text>
+        <Text style={styles.label}>{t('profile.servicesOffered')}</Text>
         <View style={styles.grid}>
           {SERVICES.map(s => (
             <TouchableOpacity key={s} style={[styles.chip, services.includes(s) && styles.chipOn]} onPress={() => toggleService(s)}>
@@ -96,14 +98,14 @@ export default function ProfileScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Home / office address</Text>
+          <Text style={styles.label}>{t('profile.homeAddress')}</Text>
           <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder="123 Main St, San Jose, CA" placeholderTextColor={colors.muted} />
           <TouchableOpacity style={styles.locBtn} onPress={useCurrentLocation}>
-            <Text style={styles.locBtnText}>📍 Use current location{lat != null ? ` (${lat.toFixed(3)}, ${lng?.toFixed(3)})` : ''}</Text>
+            <Text style={styles.locBtnText}>📍 {t('profile.useLocation')}{lat != null ? ` (${lat.toFixed(3)}, ${lng?.toFixed(3)})` : ''}</Text>
           </TouchableOpacity>
         </View>
 
-        <Button title={saving ? 'Saving…' : 'Save profile'} onPress={save} disabled={saving} style={{ marginTop: 12 }} />
+        <Button title={saving ? t('profile.saving') : t('profile.save')} onPress={save} disabled={saving} style={{ marginTop: 12 }} />
       </ScrollView>
     </SafeAreaView>
   );
