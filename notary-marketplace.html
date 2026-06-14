@@ -1308,6 +1308,9 @@
   .msg-row.theirs .msg-bubble { background: #f1f1f1; color: #111; border-bottom-left-radius: 3px; }
   .msg-time { display: block; font-size: 8px; opacity: .6; margin-top: 3px; }
   .msg-receipt { font-size: 8px; color: #999; margin-top: 2px; }
+
+  /* ---- 84: Group bookings ---- */
+  .group-toggle { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #333; cursor: pointer; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1450,6 +1453,17 @@
             <label class="field-label" for="jf-signatures">Number of signatures</label>
             <input type="number" id="jf-signatures" class="field-input" min="1" max="20" value="1" required>
             <div class="field-error">Enter at least 1 signature.</div>
+          </div>
+
+          <div class="field">
+            <label class="group-toggle">
+              <input type="checkbox" id="jf-group-toggle" onchange="toggleGroupBooking()"> Need multiple notaries?
+            </label>
+            <div id="jf-group-count-wrap" style="display:none;margin-top:8px;">
+              <label class="field-label" for="jf-group-count">How many notaries?</label>
+              <input type="number" id="jf-group-count" class="field-input" min="2" max="10" value="2" style="max-width:120px;">
+              <div class="field-label-meta" style="margin-top:4px;">We'll post one job per notary, linked as a group.</div>
+            </div>
           </div>
 
           <div class="step-foot">
@@ -2848,8 +2862,29 @@ $jobForm.addEventListener('submit', async e => {
   // Simulate a few notaries bidding on this fresh job over the next few seconds.
   seedBidsForUserJob(job);
 
+  // Group bookings (84): clone the job N-1 more times, linked by parent id.
+  const groupOn = document.getElementById('jf-group-toggle')?.checked;
+  const groupN = Math.min(10, Math.max(2, parseInt(document.getElementById('jf-group-count')?.value) || 2));
+  if (groupOn && groupN > 1) {
+    job.groupId = job.id;
+    saveState();
+    for (let i = 1; i < groupN; i++) {
+      createAndPersistJob({
+        services, signatures: job.signatures, notaryPreference: job.notaryPreference,
+        location: job.location, locationLat: job.locationLat, locationLng: job.locationLng,
+        dateTime: job.dateTime, notes: job.notes, startingPrice: job.startingPrice,
+        customerName: job.customerName, customerEmail: job.customerEmail, groupId: job.id
+      });
+    }
+    if (sb && sbUser) {
+      sb.from('group_bookings').insert({
+        customer_id: sbUser.id, parent_job_id: job.id, num_notaries: groupN
+      }).then(() => {}, e => console.warn('[Supabase] group booking:', e));
+    }
+  }
+
   setLoading(submitBtn, false);
-  toast('Job posted — notaries are bidding now');
+  toast(groupOn && groupN > 1 ? `Posted ${groupN} linked jobs.` : 'Job posted — notaries are bidding now');
   goTo('my-job');
 });
 
@@ -2966,7 +3001,7 @@ function renderMyJob(opts = {}) {
           <div class="job-summary-meta">
             <span>${job.location}</span> · <span>${formatDateTime(job.dateTime)}</span>
           </div>
-          ${jobServices(job).length > 1 ? `<div class="job-card-tags" style="margin-top:6px;">${jobServices(job).map(s => `<span class="job-tag">${escapeHTML(s)}</span>`).join('')}</div>` : ''}
+          ${(jobServices(job).length > 1 || job.groupId) ? `<div class="job-card-tags" style="margin-top:6px;">${jobServices(job).map(s => `<span class="job-tag">${escapeHTML(s)}</span>`).join('')}${groupTagHtml(job)}</div>` : ''}
         </div>
         ${!isCancelled && !isCompleted
           ? `<button class="btn btn-ghost" onclick="cancelUserJob()">Cancel job</button>`
@@ -3578,6 +3613,21 @@ function renderMyBidsList() {
       </div>
     `;
   }).join('');
+}
+
+/* ---- 84: Group bookings ---- */
+function toggleGroupBooking() {
+  const on = document.getElementById('jf-group-toggle').checked;
+  document.getElementById('jf-group-count-wrap').style.display = on ? 'block' : 'none';
+}
+function groupSize(groupId) {
+  return STATE.jobs.filter(j => j.groupId === groupId).length;
+}
+function groupTagHtml(job) {
+  if (!job.groupId) return '';
+  const n = groupSize(job.groupId);
+  if (n < 2) return '';
+  return `<span class="job-tag" style="background:#eef1f6;color:#4b5a78;">Group booking · ${n} notaries</span>`;
 }
 
 /* ---- 83: Messages + read receipts ---- */
