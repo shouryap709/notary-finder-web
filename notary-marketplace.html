@@ -1290,6 +1290,13 @@
   .doc-tpl:hover { border-color: #000; }
   .doc-tpl-title { font-size: 11px; font-weight: 600; color: #111; }
   .doc-tpl-hint { font-size: 8.5px; color: #999; }
+
+  /* ---- 82: Saved jobs ---- */
+  .dash-feed-tabs { float: right; display: inline-flex; gap: 4px; }
+  .dash-feed-tab { border: 1px solid #e2e2e2; background: #fff; color: #777; font-size: 9px; font-weight: 600; padding: 3px 10px; border-radius: 6px; cursor: pointer; }
+  .dash-feed-tab.on { background: #000; color: #fff; border-color: #000; }
+  .save-job-btn { border: none; background: none; cursor: pointer; font-size: 16px; color: #c9c9c9; line-height: 1; padding: 2px 4px; }
+  .save-job-btn.saved { color: #f0b400; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1699,7 +1706,13 @@
         </div>
       </div>
 
-      <div class="section-label">Available jobs <span class="count" id="dash-job-count"></span></div>
+      <div class="section-label">
+        Available jobs <span class="count" id="dash-job-count"></span>
+        <span class="dash-feed-tabs">
+          <button class="dash-feed-tab on" id="feed-tab-all" onclick="setFeedTab('all')">All</button>
+          <button class="dash-feed-tab" id="feed-tab-saved" onclick="setFeedTab('saved')">Saved</button>
+        </span>
+      </div>
       <div class="dash-jobs-list" id="dash-jobs-list">
         <!-- Rendered dynamically -->
       </div>
@@ -3171,9 +3184,11 @@ function renderDashboard() {
   openJobs = openJobs.filter(jobWithinBusinessHours);
 
   // Filter by service area polygon (85) when set, else max travel (respect showAllJobs)
-  const filteredJobs = showAllJobs
+  let filteredJobs = showAllJobs
     ? openJobs
     : openJobs.filter(j => jobWithinServiceArea(j, { homeLat, homeLng, maxMi, hasHome }));
+  // Saved tab (82) — only bookmarked jobs, ignoring distance limits.
+  if (feedTab === 'saved') filteredJobs = openJobs.filter(j => isJobSaved(j.id));
   const hiddenCount = openJobs.length - filteredJobs.length;
 
   // Distance / filter banner
@@ -3248,6 +3263,7 @@ function renderDashboard() {
             ${alreadyBid ? ' · <span style="color:#1d7a4d;">You bid</span>' : ''}
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
+            <button class="save-job-btn ${isJobSaved(job.id) ? 'saved' : ''}" title="${isJobSaved(job.id) ? 'Saved' : 'Save job'}" onclick="toggleSaveJob('${job.id}')">${isJobSaved(job.id) ? '★' : '☆'}</button>
             ${alreadyBid && job.documentFilePath
               ? `<button class="btn btn-ghost btn-sm" onclick="openSignedUrl('job-documents','${job.documentFilePath}')">View doc</button>`
               : ''}
@@ -3532,6 +3548,33 @@ function renderMyBidsList() {
       </div>
     `;
   }).join('');
+}
+
+/* ---- 82: Notary saved jobs ---- */
+let feedTab = 'all';
+function savedJobsForMe() {
+  STATE.savedJobs = STATE.savedJobs || {};
+  const id = STATE.notaryUser.id;
+  STATE.savedJobs[id] = STATE.savedJobs[id] || [];
+  return STATE.savedJobs[id];
+}
+function isJobSaved(jobId) { return savedJobsForMe().includes(jobId); }
+function toggleSaveJob(jobId) {
+  const list = savedJobsForMe();
+  const idx = list.indexOf(jobId);
+  if (idx >= 0) list.splice(idx, 1); else list.push(jobId);
+  saveState();
+  if (sb && sbUser) {
+    if (idx >= 0) sb.from('notary_saved_jobs').delete().eq('notary_id', sbUser.id).eq('job_id', jobId).then(() => {}, () => {});
+    else sb.from('notary_saved_jobs').insert({ notary_id: sbUser.id, job_id: jobId }).then(() => {}, () => {});
+  }
+  renderDashboard();
+}
+function setFeedTab(tab) {
+  feedTab = tab;
+  document.getElementById('feed-tab-all')?.classList.toggle('on', tab === 'all');
+  document.getElementById('feed-tab-saved')?.classList.toggle('on', tab === 'saved');
+  renderDashboard();
 }
 
 /* ---- 81: Document type templates ---- */
