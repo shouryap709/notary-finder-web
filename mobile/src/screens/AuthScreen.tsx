@@ -1,15 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Text, StyleSheet, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import Button from '../components/Button';
-import { theme, FONT } from '../theme';
+import { FONT } from '../theme';
+import { useTheme } from '../ThemeContext';
 import { getSession, signInNotary, signUpOrInNotary } from '../lib/supabase';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
 
 export default function AuthScreen({ navigation }: Props) {
+  const { colors, radius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, radius), [colors, radius]);
   const [mode, setMode] = useState<'in' | 'up'>('in');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -39,7 +42,7 @@ export default function AuthScreen({ navigation }: Props) {
   }
 
   if (checking) {
-    return <SafeAreaView style={[styles.safe, styles.center]}><ActivityIndicator color={theme.colors.primary} /></SafeAreaView>;
+    return <SafeAreaView style={[styles.safe, styles.center]}><ActivityIndicator color={colors.primary} /></SafeAreaView>;
   }
 
   return (
@@ -47,9 +50,9 @@ export default function AuthScreen({ navigation }: Props) {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.center}>
         <Text style={styles.logo}>Notary<Text style={styles.logoEm}>Finder</Text></Text>
         <Text style={styles.tagline}>{mode === 'up' ? 'Create your notary profile' : 'Notary sign in'}</Text>
-        {mode === 'up' && <TextInput style={styles.input} placeholder="Full name" placeholderTextColor={theme.colors.muted} value={name} onChangeText={setName} autoCapitalize="words" />}
-        <TextInput style={styles.input} placeholder="Email" placeholderTextColor={theme.colors.muted} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        <TextInput style={styles.input} placeholder="Password" placeholderTextColor={theme.colors.muted} value={password} onChangeText={setPassword} secureTextEntry />
+        {mode === 'up' && <TextInput style={styles.input} placeholder="Full name" placeholderTextColor={colors.muted} value={name} onChangeText={setName} autoCapitalize="words" />}
+        <TextInput style={styles.input} placeholder="Email" placeholderTextColor={colors.muted} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+        <TextInput style={styles.input} placeholder="Password" placeholderTextColor={colors.muted} value={password} onChangeText={setPassword} secureTextEntry />
         <Button title={busy ? 'Please wait…' : mode === 'up' ? 'Sign up' : 'Sign in'} onPress={submit} disabled={busy} style={styles.btn} />
         <Text style={styles.switch} onPress={() => setMode(mode === 'in' ? 'up' : 'in')}>
           {mode === 'in' ? 'New here? Create a profile' : 'Already have an account? Sign in'}
@@ -59,13 +62,13 @@ export default function AuthScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
+const makeStyles = (colors: any, radius: any) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
-  logo: { fontSize: 26, fontWeight: '700', textAlign: 'center', color: theme.colors.text, fontFamily: FONT },
-  logoEm: { color: theme.colors.muted },
-  tagline: { fontSize: 13, color: theme.colors.muted, textAlign: 'center', marginTop: 8, marginBottom: 24, fontFamily: FONT },
-  input: { borderWidth: 1, borderColor: theme.colors.line, borderRadius: theme.radius.sm, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, marginBottom: 12, color: theme.colors.text, fontFamily: FONT },
+  logo: { fontSize: 26, fontWeight: '700', textAlign: 'center', color: colors.text, fontFamily: FONT },
+  logoEm: { color: colors.muted },
+  tagline: { fontSize: 13, color: colors.muted, textAlign: 'center', marginTop: 8, marginBottom: 24, fontFamily: FONT },
+  input: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, marginBottom: 12, color: colors.text, fontFamily: FONT },
   btn: { marginTop: 4 },
-  switch: { textAlign: 'center', color: theme.colors.muted, fontSize: 12, marginTop: 18, fontFamily: FONT },
+  switch: { textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 18, fontFamily: FONT },
 });

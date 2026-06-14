@@ -5,9 +5,10 @@
 import React from 'react';
 import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+import { ThemeProvider, useTheme } from './src/ThemeContext';
 import AuthScreen from './src/screens/AuthScreen';
 import ServicesChecklistScreen from './src/screens/ServicesChecklistScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -28,18 +29,23 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function App(): React.JSX.Element {
+function Navigation(): React.JSX.Element {
+  const { mode, colors } = useTheme();
+  const navTheme = mode === 'dark'
+    ? { ...DarkTheme, colors: { ...DarkTheme.colors, background: colors.bg, card: colors.bg, text: colors.text, border: colors.line, primary: colors.text } }
+    : { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: colors.bg, card: colors.bg, text: colors.text, border: colors.line, primary: colors.text } };
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      <NavigationContainer>
+    <>
+      <StatusBar barStyle={mode === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.bg} />
+      <NavigationContainer theme={navTheme}>
         <Stack.Navigator
           initialRouteName="Auth"
           screenOptions={{
-            headerStyle: { backgroundColor: '#ffffff' },
+            headerStyle: { backgroundColor: colors.bg },
             headerTitleStyle: { fontWeight: '600' },
+            headerTintColor: colors.text,
             headerShadowVisible: false,
-            contentStyle: { backgroundColor: '#ffffff' },
+            contentStyle: { backgroundColor: colors.bg },
           }}>
           <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} />
           <Stack.Screen name="ServicesChecklist" component={ServicesChecklistScreen} options={{ title: 'Your services' }} />
@@ -50,6 +56,16 @@ export default function App(): React.JSX.Element {
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
         </Stack.Navigator>
       </NavigationContainer>
+    </>
+  );
+}
+
+export default function App(): React.JSX.Element {
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <Navigation />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

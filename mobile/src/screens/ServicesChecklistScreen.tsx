@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import Button from '../components/Button';
-import { theme, FONT } from '../theme';
+import { FONT } from '../theme';
+import { useTheme } from '../ThemeContext';
 import { updateMyProfile } from '../lib/supabase';
 
 const SERVICES = ['Acknowledgment', 'Jurat', 'Loan Signing', 'Power of Attorney', 'Apostille', 'Real Estate'];
@@ -12,6 +13,8 @@ const SERVICES = ['Acknowledgment', 'Jurat', 'Loan Signing', 'Power of Attorney'
 type Props = NativeStackScreenProps<RootStackParamList, 'ServicesChecklist'>;
 
 export default function ServicesChecklistScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [selected, setSelected] = useState<string[]>([]);
 
   function toggle(s: string) {
@@ -40,15 +43,15 @@ export default function ServicesChecklistScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
+const makeStyles = (colors: any) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.bg },
   body: { flex: 1, padding: 22 },
-  title: { fontSize: 18, fontWeight: '600', color: theme.colors.text, fontFamily: FONT },
-  sub: { fontSize: 12, color: theme.colors.muted, marginTop: 6, marginBottom: 20, fontFamily: FONT },
+  title: { fontSize: 18, fontWeight: '600', color: colors.text, fontFamily: FONT },
+  sub: { fontSize: 12, color: colors.muted, marginTop: 6, marginBottom: 20, fontFamily: FONT },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderColor: theme.colors.line, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 14 },
-  chipOn: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-  chipText: { fontSize: 12, color: theme.colors.text, fontFamily: FONT },
-  chipTextOn: { color: theme.colors.primaryText },
+  chip: { borderWidth: 1, borderColor: colors.line, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 14 },
+  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { fontSize: 12, color: colors.text, fontFamily: FONT },
+  chipTextOn: { color: colors.primaryText },
   btn: { marginTop: 'auto' },
 });

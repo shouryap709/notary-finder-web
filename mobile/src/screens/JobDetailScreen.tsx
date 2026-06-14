@@ -1,25 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { launchCamera } from 'react-native-image-picker';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import Button from '../components/Button';
-import { theme, FONT } from '../theme';
+import { FONT } from '../theme';
+import { useTheme } from '../ThemeContext';
 import { fetchJob, Job, supabase, uploadProofPhoto } from '../lib/supabase';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'JobDetail'>;
 
-function Row({ label, value }: { label: string; value?: string | number | null }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value != null && value !== '' ? String(value) : '—'}</Text>
-    </View>
-  );
-}
-
 export default function JobDetailScreen({ navigation, route }: Props) {
+  const { colors, radius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, radius), [colors, radius]);
   const { jobId } = route.params;
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,8 +47,15 @@ export default function JobDetailScreen({ navigation, route }: Props) {
     } finally { setUploading(false); }
   }
 
+  const Row = ({ label, value }: { label: string; value?: string | number | null }) => (
+    <View style={styles.row}>
+      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.value}>{value != null && value !== '' ? String(value) : '—'}</Text>
+    </View>
+  );
+
   if (loading) {
-    return <SafeAreaView style={[styles.safe, styles.center]} edges={['bottom']}><ActivityIndicator color={theme.colors.primary} /></SafeAreaView>;
+    return <SafeAreaView style={[styles.safe, styles.center]} edges={['bottom']}><ActivityIndicator color={colors.primary} /></SafeAreaView>;
   }
   if (!job) {
     return <SafeAreaView style={[styles.safe, styles.center]} edges={['bottom']}><Text style={styles.muted}>Job not found.</Text></SafeAreaView>;
@@ -80,13 +81,7 @@ export default function JobDetailScreen({ navigation, route }: Props) {
           </>
         )}
         {job.status === 'completed' && (
-          <Button
-            title={uploading ? 'Uploading…' : proofUrl ? 'Replace proof photo' : 'Add proof photo'}
-            variant="secondary"
-            disabled={uploading}
-            onPress={addProofPhoto}
-            style={{ marginTop: 16 }}
-          />
+          <Button title={uploading ? 'Uploading…' : proofUrl ? 'Replace proof photo' : 'Add proof photo'} variant="secondary" disabled={uploading} onPress={addProofPhoto} style={{ marginTop: 16 }} />
         )}
       </ScrollView>
       <View style={styles.footer}>
@@ -96,15 +91,15 @@ export default function JobDetailScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
+const makeStyles = (colors: any, radius: any) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.bg },
   center: { justifyContent: 'center', alignItems: 'center' },
   body: { padding: 22 },
-  title: { fontSize: 18, fontWeight: '700', color: theme.colors.text, marginBottom: 12, fontFamily: FONT },
-  row: { borderBottomWidth: 1, borderBottomColor: theme.colors.line, paddingVertical: 12 },
-  label: { fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5, color: theme.colors.muted, fontWeight: '600', fontFamily: FONT },
-  value: { fontSize: 14, color: theme.colors.text, marginTop: 3, fontFamily: FONT },
-  muted: { color: theme.colors.muted, fontSize: 13, fontFamily: FONT },
-  proof: { width: '100%', height: 200, borderRadius: theme.radius.md, marginTop: 8 },
-  footer: { padding: 18, borderTopWidth: 1, borderTopColor: theme.colors.line },
+  title: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 12, fontFamily: FONT },
+  row: { borderBottomWidth: 1, borderBottomColor: colors.line, paddingVertical: 12 },
+  label: { fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5, color: colors.muted, fontWeight: '600', fontFamily: FONT },
+  value: { fontSize: 14, color: colors.text, marginTop: 3, fontFamily: FONT },
+  muted: { color: colors.muted, fontSize: 13, fontFamily: FONT },
+  proof: { width: '100%', height: 200, borderRadius: radius.md, marginTop: 8 },
+  footer: { padding: 18, borderTopWidth: 1, borderTopColor: colors.line },
 });

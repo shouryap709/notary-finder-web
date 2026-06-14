@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Text, TouchableOpacity, View, StyleSheet } from 'react-native';
-import { theme, FONT } from '../theme';
+import { FONT } from '../theme';
+import { useTheme } from '../ThemeContext';
 import { Job } from '../lib/supabase';
 
 type Props = { job: Job; onPress: () => void; onBid: () => void };
@@ -11,6 +12,8 @@ function jobLabel(job: Job) {
 }
 
 export default function JobCard({ job, onPress, onBid }: Props) {
+  const { colors, radius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, radius), [colors, radius]);
   const when = job.date_time
     ? new Date(job.date_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
     : 'Flexible';
@@ -30,12 +33,12 @@ export default function JobCard({ job, onPress, onBid }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderColor: theme.colors.line, borderRadius: theme.radius.md, padding: 14, marginBottom: 12 },
+const makeStyles = (colors: any, radius: any) => StyleSheet.create({
+  card: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 14, marginBottom: 12, backgroundColor: colors.card },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.colors.text, marginRight: 10, fontFamily: FONT },
-  price: { fontSize: 15, fontWeight: '600', color: theme.colors.text, fontFamily: FONT },
-  meta: { fontSize: 11, color: theme.colors.muted, marginTop: 4, fontFamily: FONT },
-  bidBtn: { marginTop: 12, backgroundColor: theme.colors.primary, borderRadius: theme.radius.sm, paddingVertical: 10, alignItems: 'center' },
-  bidText: { color: theme.colors.primaryText, fontSize: 13, fontWeight: '600', fontFamily: FONT },
+  title: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text, marginRight: 10, fontFamily: FONT },
+  price: { fontSize: 15, fontWeight: '600', color: colors.text, fontFamily: FONT },
+  meta: { fontSize: 11, color: colors.muted, marginTop: 4, fontFamily: FONT },
+  bidBtn: { marginTop: 12, backgroundColor: colors.primary, borderRadius: radius.sm, paddingVertical: 10, alignItems: 'center' },
+  bidText: { color: colors.primaryText, fontSize: 13, fontWeight: '600', fontFamily: FONT },
 });
