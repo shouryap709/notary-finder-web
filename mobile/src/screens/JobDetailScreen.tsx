@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { launchCamera } from 'react-native-image-picker';
 import { RootStackParamList } from '../../App';
 import Button from '../components/Button';
 import { theme, FONT } from '../theme';
-import { fetchJob, Job, supabase } from '../lib/supabase';
+import { fetchJob, Job, supabase, uploadProofPhoto } from '../lib/supabase';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'JobDetail'>;
 
@@ -23,6 +24,7 @@ export default function JobDetailScreen({ navigation, route }: Props) {
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [proofUrl, setProofUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   async function load() {
     const j = await fetchJob(jobId);
@@ -34,6 +36,22 @@ export default function JobDetailScreen({ navigation, route }: Props) {
     }
   }
   useEffect(() => { load(); }, [jobId]);
+
+  async function addProofPhoto() {
+    const result = await launchCamera({ mediaType: 'photo', includeBase64: true, quality: 0.7 });
+    if (result.didCancel) return;
+    const asset = result.assets?.[0];
+    if (!asset?.base64) { Alert.alert('No photo', 'Could not capture a photo.'); return; }
+    const ext = (asset.fileName?.split('.').pop() || (asset.type?.includes('png') ? 'png' : 'jpg')).toLowerCase();
+    setUploading(true);
+    try {
+      await uploadProofPhoto(jobId, asset.base64, ext, asset.type || 'image/jpeg');
+      if (asset.uri) setProofUrl(asset.uri);
+      Alert.alert('Uploaded', 'Proof photo added to this job.');
+    } catch (e: any) {
+      Alert.alert('Upload failed', e?.message || 'Please try again.');
+    } finally { setUploading(false); }
+  }
 
   if (loading) {
     return <SafeAreaView style={[styles.safe, styles.center]} edges={['bottom']}><ActivityIndicator color={theme.colors.primary} /></SafeAreaView>;
@@ -60,6 +78,15 @@ export default function JobDetailScreen({ navigation, route }: Props) {
             <Text style={[styles.label, { marginTop: 16 }]}>Proof photo</Text>
             <Image source={{ uri: proofUrl }} style={styles.proof} resizeMode="cover" />
           </>
+        )}
+        {job.status === 'completed' && (
+          <Button
+            title={uploading ? 'Uploading…' : proofUrl ? 'Replace proof photo' : 'Add proof photo'}
+            variant="secondary"
+            disabled={uploading}
+            onPress={addProofPhoto}
+            style={{ marginTop: 16 }}
+          />
         )}
       </ScrollView>
       <View style={styles.footer}>

@@ -114,6 +114,39 @@ export async function fetchJob(id: string): Promise<Job | null> {
   return data ?? null;
 }
 
+/** Minimal base64 → Uint8Array (no atob/Buffer dependency in Hermes). */
+function base64ToBytes(b64: string): Uint8Array {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const lookup = new Uint8Array(256);
+  for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i;
+  const clean = b64.replace(/[^A-Za-z0-9+/]/g, '');
+  const len = clean.length;
+  const bytesLen = Math.floor((len * 3) / 4);
+  const bytes = new Uint8Array(bytesLen);
+  let p = 0;
+  for (let i = 0; i < len; i += 4) {
+    const e1 = lookup[clean.charCodeAt(i)];
+    const e2 = lookup[clean.charCodeAt(i + 1)];
+    const e3 = lookup[clean.charCodeAt(i + 2)];
+    const e4 = lookup[clean.charCodeAt(i + 3)];
+    bytes[p++] = (e1 << 2) | (e2 >> 4);
+    if (p < bytesLen) bytes[p++] = ((e2 & 15) << 4) | (e3 >> 2);
+    if (p < bytesLen) bytes[p++] = ((e3 & 3) << 6) | e4;
+  }
+  return bytes;
+}
+
+/** Upload a captured proof photo and record its path on the job. */
+export async function uploadProofPhoto(jobId: string, base64: string, ext: string, contentType: string) {
+  const path = `${jobId}/proof.${ext}`;
+  const bytes = base64ToBytes(base64);
+  const { error: upErr } = await supabase.storage.from('job-documents').upload(path, bytes, { contentType, upsert: true });
+  if (upErr) throw upErr;
+  const { error } = await supabase.from('jobs').update({ proof_photo_path: path }).eq('id', jobId);
+  if (error) throw error;
+  return path;
+}
+
 export async function placeBid(jobId: string, price: number, message: string) {
   const session = await getSession();
   if (!session) throw new Error('Not signed in');
