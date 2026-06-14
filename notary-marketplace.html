@@ -1225,6 +1225,11 @@
   .help-panel textarea { min-height: 74px; resize: vertical; }
   .help-panel input:focus, .help-panel textarea:focus { border-color: #000; }
   .help-msg { font-size: 10.5px; color: #1f8a3b; min-height: 14px; margin-top: 2px; }
+
+  /* ---- 72: Commission banner ---- */
+  .cm-banner { margin-bottom: 14px; padding: 10px 13px; border-radius: 8px; font-size: 10px; line-height: 1.5; }
+  .cm-banner.yellow { background: #fff8e1; border: 1px solid #f3e0a3; color: #8a6d1f; }
+  .cm-banner.red    { background: #fdecea; border: 1px solid #f5c2bd; color: #b3261e; }
 </style>
 
 <!-- Supabase JS (CDN) — used for auth + Postgres data layer -->
@@ -1601,6 +1606,7 @@
       </div>
       <div class="page-subtitle">Here are jobs in your area you can bid on.</div>
       <div id="notary-settings-panel" style="display:none;"></div>
+      <div id="commission-banner"></div>
       <div id="dash-distance-banner"></div>
 
       <div class="stats-row">
@@ -2364,7 +2370,7 @@ function goTo(pageId) {
 
   // Re-render dynamic pages on entry.
   if (pageId === 'my-job') renderMyJob();
-  if (pageId === 'notary-dashboard') { renderDashboard(); renderNotaryHeaderPill(); }
+  if (pageId === 'notary-dashboard') { renderCommissionBanner(); renderDashboard(); renderNotaryHeaderPill(); }
   if (pageId === 'my-bids') { renderMyBids(); renderNotaryHeaderPill(); }
   if (pageId === 'post-job') resetPostJobForm();
 
@@ -3207,6 +3213,10 @@ const $bmCeilingHint = document.getElementById('bm-ceiling-hint');
 let activeBidJobId = null;
 
 function openBidModal(jobId) {
+  if (commissionExpired()) {
+    toast('Your commission has expired — renew to place bids.');
+    return;
+  }
   const job = STATE.jobs.find(j => j.id === jobId);
   if (!job) return;
   activeBidJobId = jobId;
@@ -3525,7 +3535,7 @@ async function submitNotaryLogin() {
   // Best-effort fetch of notary's current rating for dashboard display
   if (sb && sbUser) {
     sb.from('profiles')
-      .select('rating, reviews_count, home_address, home_lat, home_lng, max_travel_mi')
+      .select('rating, reviews_count, home_address, home_lat, home_lng, max_travel_mi, commission_expires_at, business_hours, service_area_polygon')
       .eq('id', sbUser.id).maybeSingle()
       .then(({ data }) => {
         if (data && notarySession) {
@@ -3535,7 +3545,10 @@ async function submitNotaryLogin() {
           notarySession.homeLat         = data.home_lat       ?? notarySession.homeLat     ?? null;
           notarySession.homeLng         = data.home_lng       ?? notarySession.homeLng     ?? null;
           notarySession.maxTravelMi     = data.max_travel_mi  ?? notarySession.maxTravelMi ?? 25;
-          if (document.getElementById('notary-dashboard').classList.contains('active')) renderDashboard();
+          notarySession.commissionExpiresAt = data.commission_expires_at ?? notarySession.commissionExpiresAt ?? null;
+          notarySession.businessHours       = data.business_hours        ?? notarySession.businessHours ?? null;
+          notarySession.serviceAreaPolygon  = data.service_area_polygon  ?? notarySession.serviceAreaPolygon ?? null;
+          if (document.getElementById('notary-dashboard').classList.contains('active')) { renderCommissionBanner(); renderDashboard(); }
         }
       }).catch(() => {});
   }
@@ -3604,6 +3617,12 @@ function toggleNotarySettings() {
         <label class="field-label" for="ns-max-travel">Max travel distance <span class="field-label-meta">(miles)</span></label>
         <input type="number" id="ns-max-travel" class="field-input" value="${maxMi}" min="1" max="200" style="max-width:120px;">
       </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label class="field-label" for="ns-commission-exp">Commission expires</label>
+        <input type="date" id="ns-commission-exp" class="field-input" value="${notarySession?.commissionExpiresAt || ''}" style="max-width:180px;">
+      </div>
+      ${nsBusinessHoursHtml()}
+      ${nsServiceAreaHtml()}
       <div style="display:flex;align-items:center;gap:8px;">
         <button class="btn btn-primary btn-sm" onclick="saveNotarySettings()">Save</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleNotarySettings()">Cancel</button>
@@ -3679,11 +3698,55 @@ async function saveNotarySettings() {
       console.warn('[Supabase] save notary settings:', e);
     }
   }
+  const commEl = document.getElementById('ns-commission-exp');
+  if (commEl && notarySession) notarySession.commissionExpiresAt = commEl.value || null;
+  nsCollectBusinessHours();
+  if (notarySession) notarySession.serviceAreaPolygon = nsPolygonVertices.length ? nsPolygonVertices.slice() : (notarySession.serviceAreaPolygon || null);
+  if (sb && sbUser) {
+    try {
+      await sb.from('profiles').update({
+        commission_expires_at: notarySession?.commissionExpiresAt || null,
+        business_hours:        notarySession?.businessHours || null,
+        service_area_polygon:  notarySession?.serviceAreaPolygon || null
+      }).eq('id', sbUser.id);
+    } catch (e) { console.warn('[Supabase] save extended settings:', e); }
+  }
   showAllJobs = false;
   toggleNotarySettings();
   toast('Settings saved');
+  renderCommissionBanner();
   renderDashboard();
 }
+
+/* ---- 72: Commission expiration tracking ---- */
+function renderCommissionBanner() {
+  const el = document.getElementById('commission-banner');
+  if (!el) return;
+  const raw = notarySession?.commissionExpiresAt;
+  if (!raw) { el.innerHTML = ''; return; }
+  const exp = new Date(raw + 'T00:00:00');
+  const days = Math.ceil((exp - Date.now()) / 86400000);
+  const dateStr = exp.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  if (days < 0) {
+    el.innerHTML = `<div class="cm-banner red">Your notary commission expired ${dateStr}. New bids are blocked until you renew at the CA Secretary of State and update your profile.</div>`;
+  } else if (days <= 30) {
+    el.innerHTML = `<div class="cm-banner yellow">Your commission expires ${dateStr} — renew at the CA Secretary of State.</div>`;
+  } else {
+    el.innerHTML = '';
+  }
+}
+
+function commissionExpired() {
+  const raw = notarySession?.commissionExpiresAt;
+  if (!raw) return false;
+  return new Date(raw + 'T00:00:00') < new Date(new Date().toDateString());
+}
+
+/* ---- Stubs filled in by features 76 (business hours) & 85 (service area) ---- */
+function nsBusinessHoursHtml() { return ''; }
+function nsServiceAreaHtml() { return ''; }
+function nsCollectBusinessHours() {}
+let nsPolygonVertices = [];
 
 /* ================================================================
    LEGAL LINKS — set href on all data-legal anchors from LEGAL_URLS
