@@ -2867,7 +2867,9 @@ function renderMyJob(opts = {}) {
           </div>
           ${jobServices(job).length > 1 ? `<div class="job-card-tags" style="margin-top:6px;">${jobServices(job).map(s => `<span class="job-tag">${escapeHTML(s)}</span>`).join('')}</div>` : ''}
         </div>
-        ${!isCancelled && !isCompleted ? `<button class="btn btn-ghost" onclick="cancelUserJob()">Cancel job</button>` : ''}
+        ${!isCancelled && !isCompleted
+          ? `<button class="btn btn-ghost" onclick="cancelUserJob()">Cancel job</button>`
+          : `<button class="btn btn-secondary btn-sm" onclick="duplicateJob('${job.id}')">Duplicate</button>`}
       </div>
       <div class="job-summary-grid">
         <div class="job-summary-cell">
@@ -3816,6 +3818,30 @@ function createAndPersistJob(fields, opts = {}) {
   else { sbSaveJob(job).catch(() => {}); }
   if (!opts.skipSeed) seedBidsForUserJob(job);
   return job;
+}
+
+/* ---- 75: Job duplication ---- */
+function duplicateJob(jobId) {
+  const src = STATE.jobs.find(j => j.id === jobId);
+  if (!src) return;
+  const dt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const pad = n => String(n).padStart(2, '0');
+  const dtLocal = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+  createAndPersistJob({
+    services: jobServices(src),
+    signatures: src.signatures,
+    notaryPreference: src.notaryPreference,
+    location: src.location,
+    locationLat: src.locationLat,
+    locationLng: src.locationLng,
+    dateTime: dtLocal,
+    notes: src.notes,
+    startingPrice: src.startingPrice,
+    customerName: src.customerName,
+    customerEmail: src.customerEmail
+  });
+  toast('Job duplicated. View in My Jobs.');
+  renderMyJob();
 }
 
 /* ---- 74: Bulk job posting ---- */
